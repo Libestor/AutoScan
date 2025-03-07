@@ -25,7 +25,7 @@ func TestSpider(t *testing.T) {
 	if err != nil {
 		t.Error("Error creating spider:", err)
 	}
-	err = spider.Start("http://127.0.0.1/pikachu")
+	err = spider.Start("http://127.0.0.1/pikachu", "http://127.0.0.1/pikachu")
 	if err != nil {
 		t.Error("Error starting spider:", err)
 	}

@@ -1,6 +1,7 @@
 package Spider
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -27,6 +28,7 @@ type Spider struct {
 	visited    map[string]bool
 	added      map[string]bool
 	urlQueue   chan string
+	elemSha256 map[string]bool
 	baseDomain string
 	mu         sync.Mutex
 }
@@ -78,11 +80,12 @@ func NewSpider() (*Spider, error) {
 
 	// 初始化爬虫
 	spider := &Spider{
-		service:  service,
-		driver:   driver,
-		visited:  make(map[string]bool),
-		added:    make(map[string]bool),
-		urlQueue: make(chan string, 100),
+		service:    service,
+		driver:     driver,
+		visited:    make(map[string]bool),
+		added:      make(map[string]bool),
+		urlQueue:   make(chan string, 100),
+		elemSha256: make(map[string]bool),
 	}
 	return spider, nil
 }
@@ -293,6 +296,34 @@ func (s *Spider) processForms() {
 	}
 }
 
+// 点击元素
+func (s *Spider) clickWithJS(elem selenium.WebElement) error {
+	_, err := s.driver.ExecuteScript("arguments[0].click();", []interface{}{elem})
+	time.Sleep(100 * time.Millisecond)
+	if err != nil && isStaleError(err) {
+		return fmt.Errorf("元素已失效")
+	}
+	return nil
+}
+
+// 检查元素是否失效
+func isStaleError(err error) bool {
+	return strings.Contains(err.Error(), "stale element reference")
+}
+
+// 带超时的元素等待函数
+func (s *Spider) waitForElements(selector string, timeout time.Duration) ([]selenium.WebElement, error) {
+	endTime := time.Now().Add(timeout)
+	for time.Now().Before(endTime) {
+		els, err := s.driver.FindElements(selenium.ByCSSSelector, selector)
+		if err == nil && len(els) > 0 {
+			return els, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return nil, fmt.Errorf("元素查找超时")
+}
+
 // 模拟用户点击
 func (s *Spider) handleInteractiveElements() {
 	selectors := []string{
@@ -307,11 +338,27 @@ func (s *Spider) handleInteractiveElements() {
 			continue
 		}
 
-		for _, elem := range elements {
+		for index, elem := range elements {
+			current_elements, _ := s.driver.FindElements(selenium.ByCSSSelector, selector)
+			if index >= len(current_elements) {
+				continue
+			}
+			// 此处是为了防止页面刷新导致elem元素不对应，所以使用index保存elem
+			elem = current_elements[index]
+			i := 0
 			if isVisible, _ := elem.IsDisplayed(); isVisible {
-				if err := elem.Click(); err == nil {
+				initialURL, _ := s.driver.CurrentURL()
+				if s.isUnicquElement(elem) {
+					continue
+				}
+				if err := s.clickWithJS(elem); err == nil {
 					time.Sleep(100 * time.Millisecond)
 					s.processNetworkRequests()
+					i++
+					newURL, _ := s.driver.CurrentURL()
+					if newURL != initialURL {
+						s.driver.Back()
+					}
 				}
 			}
 		}
@@ -428,4 +475,27 @@ func GetURL(url string) string {
 	part := strings.Split(url, "?")
 	//parsedURL, _ := URL.Parse(url)
 	return part[0]
+}
+
+// 获取elem的哈希值
+func (s *Spider) isUnicquElement(elem selenium.WebElement) bool {
+	// 组合多个特征作为唯一标识
+	tag, _ := elem.TagName()
+	text, _ := elem.Text()
+	href, _ := elem.GetAttribute("href")
+	onclick, _ := elem.GetAttribute("onclick")
+	id, _ := elem.GetAttribute("id")
+	class, _ := elem.GetAttribute("class")
+
+	// 使用SHA256生成哈希标识
+	keyData := fmt.Sprintf("%s|%s|%s|%s|%s|%s",
+		tag, text, href, onclick, id, class)
+	sha := fmt.Sprintf("%s", sha256.Sum256([]byte(keyData)))
+	if s.elemSha256[sha] == true {
+		return true
+	} else {
+		s.elemSha256[sha] = true
+		return false
+	}
+
 }

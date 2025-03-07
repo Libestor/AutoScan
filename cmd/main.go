@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 )
 import "AutoScan/pkg/spider"
@@ -12,7 +13,7 @@ func main() {
 	if err != nil {
 		fmt.Println("Error creating spider:", err)
 	}
-	spider.Start("http://127.0.0.1/pikachu/vul/ssrf/ssrf.php", "http://127.0.0.1/pikachu/vul/ssrf")
+	spider.Start("http://127.0.0.1/pikachu/", "http://127.0.0.1/pikachu/")
 	fmt.Printf("发现 %d 个端点：\n", len(spider.Results))
 	for i, item := range spider.Results {
 		fmt.Printf("%d. %s %s\n", i+1, item.Method, item.URL)
@@ -21,12 +22,12 @@ func main() {
 		fmt.Printf(strings.Repeat("-", 50))
 		fmt.Println()
 	}
-	//file, err := os.OpenFile("pikachu.json", os.O_CREATE|os.O_WRONLY, 0644)
-	//if err != nil {
-	//
-	//}
-	//encoder := json.NewEncoder(file)
-	//err = encoder.Encode(spider.Results)
+	file, err := os.OpenFile("pikachu.json", os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+
+	}
+	encoder := json.NewEncoder(file)
+	err = encoder.Encode(spider.Results)
 	if err != nil {
 
 	}
