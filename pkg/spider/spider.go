@@ -2,6 +2,7 @@ package Spider
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -274,12 +275,12 @@ func (s *Spider) processForms() {
 			case "input":
 				switch inputType {
 				case "text", "email", "search", "password":
-					input.SendKeys("test_data")
+					input.SendKeys("spider_test_data")
 				case "checkbox", "radio":
 					input.Click()
 				}
 			case "textarea":
-				input.SendKeys("sample_text_content")
+				input.SendKeys("spider_test_content")
 			case "select":
 				options, _ := input.FindElements(selenium.ByTagName, "option")
 				if len(options) > 0 {
@@ -345,7 +346,6 @@ func (s *Spider) handleInteractiveElements() {
 			}
 			// 此处是为了防止页面刷新导致elem元素不对应，所以使用index保存elem
 			elem = current_elements[index]
-			i := 0
 			if isVisible, _ := elem.IsDisplayed(); isVisible {
 				initialURL, _ := s.driver.CurrentURL()
 				if s.isUnicquElement(elem) {
@@ -354,7 +354,6 @@ func (s *Spider) handleInteractiveElements() {
 				if err := s.clickWithJS(elem); err == nil {
 					time.Sleep(100 * time.Millisecond)
 					s.processNetworkRequests()
-					i++
 					newURL, _ := s.driver.CurrentURL()
 					if newURL != initialURL {
 						s.driver.Back()
@@ -490,11 +489,13 @@ func (s *Spider) isUnicquElement(elem selenium.WebElement) bool {
 	// 使用SHA256生成哈希标识
 	keyData := fmt.Sprintf("%s|%s|%s|%s|%s|%s",
 		tag, text, href, onclick, id, class)
-	sha := fmt.Sprintf("%s", sha256.Sum256([]byte(keyData)))
-	if s.elemSha256[sha] == true {
+	sha := fmt.Sprintf("%x", sha256.Sum256([]byte(keyData)))
+	base64 := base64.StdEncoding.EncodeToString([]byte(sha))
+	//sha := fmt.Sprintf("%s", sha256.Sum256([]byte(keyData)))
+	if s.elemSha256[base64] == true {
 		return true
 	} else {
-		s.elemSha256[sha] = true
+		s.elemSha256[base64] = true
 		return false
 	}
 
