@@ -17,9 +17,10 @@ import (
 )
 
 type RequestInfo struct {
-	URL    string
-	Method string
-	Params map[string][]string
+	URL         string
+	Method      string
+	Params      map[string][]string
+	requestType string
 }
 
 type Spider struct {
@@ -228,6 +229,7 @@ func (s *Spider) processRequest(request map[string]interface{}) {
 	}
 	method, _ := request["method"].(string)
 	var params map[string][]string
+	var requestType string
 	// 过滤静态资源
 	if isStaticResource(url) {
 		return
@@ -235,20 +237,21 @@ func (s *Spider) processRequest(request map[string]interface{}) {
 	if method == "POST" {
 		//fmt.Printf("[+]发现POST请求：%s\n", url)
 		//params = request["postData"].(map[string][]string)
-		params = ParseQuery(request["postData"].(string))
+		params, requestType = ParseQuery(request["postData"].(string))
 	}
 	// 解析参数
 	if method == "GET" {
 		//fmt.Printf("[+]发现GET请求：%s\n", url)
 		parsedURL, _ := URL.Parse(url)
-		params = ParseQuery(parsedURL.RawQuery)
+		params, requestType = ParseQuery(parsedURL.RawQuery)
 	}
 
 	// 添加请求信息
 	reqInfo := RequestInfo{
-		URL:    GetURL(url),
-		Method: strings.ToUpper(method),
-		Params: params,
+		URL:         GetURL(url),
+		Method:      strings.ToUpper(method),
+		Params:      params,
+		requestType: requestType,
 	}
 
 	s.mu.Lock()
@@ -346,11 +349,11 @@ func (s *Spider) handleInteractiveElements() {
 			}
 			// 此处是为了防止页面刷新导致elem元素不对应，所以使用index保存elem
 			elem = current_elements[index]
-			if isVisible, _ := elem.IsDisplayed(); isVisible {
+			if isVisible, _ := elem.IsDisplayed(); isVisible && !s.isUnicquElement(elem) {
 				initialURL, _ := s.driver.CurrentURL()
-				if s.isUnicquElement(elem) {
-					continue
-				}
+				//if s.isUnicquElement(elem) {
+				//	continue
+				//}
 				if err := s.clickWithJS(elem); err == nil {
 					time.Sleep(100 * time.Millisecond)
 					s.processNetworkRequests()
@@ -462,9 +465,18 @@ func (s *Spider) deduplicate() {
 	s.Results = uniqueResults
 
 }
-func ParseQuery(query string) map[string][]string {
-	params, _ := URL.ParseQuery(query)
-	return params
+func ParseQuery(query string) (map[string][]string, string) {
+	var data map[string]interface{}
+	params := make(map[string][]string)
+	err := json.Unmarshal([]byte(query), &data)
+	if err != nil {
+		params, _ := URL.ParseQuery(query)
+		return params, "application/x-www-form-urlencoded"
+	}
+	for dataKey, dataValue := range data {
+		params[dataKey] = []string{fmt.Sprintf("%v", dataValue)}
+	}
+	return params, "application/json"
 }
 
 func GetURL(url string) string {
@@ -480,22 +492,24 @@ func GetURL(url string) string {
 func (s *Spider) isUnicquElement(elem selenium.WebElement) bool {
 	// 组合多个特征作为唯一标识
 	tag, _ := elem.TagName()
-	text, _ := elem.Text()
+	//text, _ := elem.Text()
 	href, _ := elem.GetAttribute("href")
 	onclick, _ := elem.GetAttribute("onclick")
 	id, _ := elem.GetAttribute("id")
 	class, _ := elem.GetAttribute("class")
-
+	if len(href) > 0 && href[len(href)-1] == '#' {
+		href = href[:len(href)-1]
+	}
 	// 使用SHA256生成哈希标识
-	keyData := fmt.Sprintf("%s|%s|%s|%s|%s|%s",
-		tag, text, href, onclick, id, class)
+	keyData := fmt.Sprintf("%s|%s|%s|%s|%s",
+		tag, href, onclick, id, class)
 	sha := fmt.Sprintf("%x", sha256.Sum256([]byte(keyData)))
-	base64 := base64.StdEncoding.EncodeToString([]byte(sha))
+	base64Str := base64.StdEncoding.EncodeToString([]byte(sha))
 	//sha := fmt.Sprintf("%s", sha256.Sum256([]byte(keyData)))
-	if s.elemSha256[base64] == true {
+	if s.elemSha256[base64Str] == true {
 		return true
 	} else {
-		s.elemSha256[base64] = true
+		s.elemSha256[base64Str] = true
 		return false
 	}
 
