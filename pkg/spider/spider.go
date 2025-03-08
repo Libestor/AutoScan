@@ -9,7 +9,6 @@ import (
 	URL "net/url"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/tebeka/selenium"
@@ -32,7 +31,6 @@ type Spider struct {
 	urlQueue   chan string
 	elemSha256 map[string]bool
 	baseDomain string
-	mu         sync.Mutex
 }
 
 const (
@@ -165,14 +163,10 @@ func (s *Spider) dynamicSpider() {
 // 对当前页面进行爬取
 func (s *Spider) spiderPage(url string) {
 	url = GetURL(url)
-	s.mu.Lock()
 	if s.visited[url] {
-		s.mu.Unlock()
 		return
 	}
 	s.visited[url] = true
-	s.mu.Unlock()
-
 	if !strings.Contains(url, s.baseDomain) {
 		return
 	}
@@ -253,9 +247,6 @@ func (s *Spider) processRequest(request map[string]interface{}) {
 		Params:      params,
 		requestType: requestType,
 	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.Results = append(s.Results, reqInfo)
 }
 
@@ -385,13 +376,10 @@ func (s *Spider) extractLinks(by string, value string) {
 		fmt.Printf("Error finding links: %v\n", err)
 		return
 	}
-
 	for _, link := range links {
 		href, _ := link.GetAttribute("href")
 		if href != "" && strings.Contains(href, s.baseDomain) {
-			s.mu.Lock()
 			s.addurlQueue(href)
-			s.mu.Unlock()
 		}
 	}
 }
