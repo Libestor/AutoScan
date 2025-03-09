@@ -19,7 +19,7 @@ func TestRunSqlScan(t *testing.T) {
 	i := 0
 	for _, result := range results {
 		if result.IsSqli {
-			t.Log(result.URL, result.Method, result.IsSqli, result.Note)
+			t.Log(result.URL, result.Method, result.IsSqli, result.SqlParams, result.Note)
 			i++
 		}
 	}
@@ -114,10 +114,12 @@ func TestErrorSqli(t *testing.T) {
 		},
 		RequestType: "application/x-www-form-urlencoded",
 	}
-	result := sqli.ErrorSqli(spider)
+	result, target := sqli.ErrorSqli(spider)
 	if !result {
 		t.Error("ErrorSqli failed")
 	}
+	t.Log("URL:", spider.URL)
+	t.Log("target:", target)
 }
 func TestCheckBool(t *testing.T) {
 	str1 := "test_data13sdfasasdfasdferr23412341asdfasdfasdfasdfasdf23qwerwqe1234123erwqerqwer1221341234wqerqwcacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13cacatest_data13caca"
@@ -141,8 +143,40 @@ func TestBoolSqli(t *testing.T) {
 		},
 		RequestType: "application/x-www-form-urlencoded",
 	}
-	result := sqli.BoolSqli(spider)
+	result, target := sqli.BoolSqli(spider)
 	if !result {
 		t.Error("ErrorSqli failed")
 	}
+	t.Log("URL:", spider.URL)
+	t.Log("target:", target)
+}
+func TestTimeSqli(t *testing.T) {
+	spider := Spider.RequestInfo{
+		URL:    "http://127.0.0.1/pikachu/vul/sqli/sqli_search.php",
+		Method: "GET",
+		Params: map[string][]string{
+			"name": {"test"},
+		},
+		RequestType: "application/x-www-form-urlencoded",
+	}
+	result, target := sqli.TimeSqli(spider)
+	if !result {
+		t.Error("ErrorSqli failed")
+	}
+	t.Log("URL:", spider.URL)
+	t.Log("target:", target)
+}
+func TestCalcTime(t *testing.T) {
+	spider := Spider.RequestInfo{
+		URL:    "http://127.0.0.1/pikachu/vul/sqli/sqli_str.php",
+		Method: "GET",
+		Params: map[string][]string{
+			"name": {"test"},
+		},
+		RequestType: "application/x-www-form-urlencoded",
+	}
+	timeSqlInfo := sqli.TimeSqlInfo{}
+	timeSqlInfo.CalcTime(spider)
+	t.Log("Average:", timeSqlInfo.Average)
+	t.Log("Deviation:", timeSqlInfo.Deviation)
 }

