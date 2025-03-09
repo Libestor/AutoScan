@@ -1,4 +1,4 @@
-package spider_test
+package test
 
 import (
 	"encoding/json"

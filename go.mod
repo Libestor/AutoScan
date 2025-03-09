@@ -1,9 +1,13 @@
 module AutoScan
 
-go 1.20
+go 1.21
+
+toolchain go1.24.1
 
 require (
+	github.com/agnivade/levenshtein v1.2.1
 	github.com/go-resty/resty/v2 v2.16.5
+	github.com/jinzhu/copier v0.4.0
 	github.com/tebeka/selenium v0.9.9
 )
 

@@ -19,7 +19,7 @@ type RequestInfo struct {
 	URL         string
 	Method      string
 	Params      map[string][]string
-	requestType string
+	RequestType string
 }
 
 type Spider struct {
@@ -245,7 +245,7 @@ func (s *Spider) processRequest(request map[string]interface{}) {
 		URL:         GetURL(url),
 		Method:      strings.ToUpper(method),
 		Params:      params,
-		requestType: requestType,
+		RequestType: requestType,
 	}
 	s.Results = append(s.Results, reqInfo)
 }
