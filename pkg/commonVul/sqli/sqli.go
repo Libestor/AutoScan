@@ -23,7 +23,7 @@ var ERRORDIR = []string{
 
 // 参数为空时的默认值
 var DEFAULT_PARAM = "1"
-var SIMILARITY = 0.9999
+var SIMILARITY = 0.99999
 
 // BOOL数字盲注
 var BOOLNUMDIR = map[string]string{
@@ -79,7 +79,7 @@ var regexPatterns = []*regexp.Regexp{
 
 func init() {
 	client.client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
-
+	//client.client.SetProxy("http://127.0.0.1:8080")
 }
 func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
 	data := []*SqlResult{}
@@ -114,11 +114,11 @@ func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
 	return results
 }
 func (s *SqlResult) TestSqli(info Spider.RequestInfo) {
-	if ErrorSqli(info) {
-		s.IsSqli = true
-		s.Note = "ErrorSqli"
-		return
-	}
+	//if ErrorSqli(info) {
+	//	s.IsSqli = true
+	//	s.Note = "ErrorSqli"
+	//	return
+	//}
 	if BoolSqli(info) {
 		s.IsSqli = true
 		s.Note = "BoolSqli"
@@ -159,7 +159,12 @@ func ErrorSqli(info Spider.RequestInfo) bool {
 
 // 布尔盲注
 func BoolSqli(info Spider.RequestInfo) bool {
-
+	// 遍历参数,并设置默认值
+	for param, _ := range info.Params {
+		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
+			info.Params[param] = []string{DEFAULT_PARAM}
+		}
+	}
 	for i, _ := range info.Params {
 		_, err := strconv.Atoi(info.Params[i][0])
 		if err != nil {
@@ -181,11 +186,10 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 	if str {
 		payload = BOOLCHAR
 	}
-	// 为每个参数设置默认值
 	newParams := make(map[string]string)
 	for param, _ := range info.Params {
-		if len(info.Params[param]) == 0 {
-			info.Params[param] = []string{DEFAULT_PARAM}
+		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
+			newParams[param] = DEFAULT_PARAM
 		}
 		newParams[param] = info.Params[param][0]
 	}
@@ -227,8 +231,22 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 	if (True1AndOrigin && False1AndOrigin) || True1AndFalse1 {
 		return false
 	}
-	// 如果三者都不同，则表示不是漏洞,此处不完备，需要进一步验证
+	// 如果三者都不同，则需要进一步验证
 	if !True1AndOrigin && !False1AndOrigin {
+		// 如果true1和tru2相同，则表示是漏洞，并且false1和false2也相同
+		True2resp, err := client.Request(info.URL, info.Method, true2, info.RequestType)
+		if err != nil {
+			fmt.Println("BoolSqli true2 request Error:", err)
+			return false
+		}
+		False2resp, err := client.Request(info.URL, info.Method, false2, info.RequestType)
+		if err != nil {
+			fmt.Println("BoolSqli false2 request Error:", err)
+			return false
+		}
+		if CheckBool(True2resp, True1resp) && CheckBool(False2resp, False1Resp) {
+			return true
+		}
 		return false
 	}
 	// 如果True1和原始页面相同，False1和原始页面不同

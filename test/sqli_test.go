@@ -137,7 +137,7 @@ func TestBoolSqli(t *testing.T) {
 		URL:    "http://127.0.0.1/pikachu/vul/sqli/sqli_id.php",
 		Method: "POST",
 		Params: map[string][]string{
-			"id": {"1"},
+			"id": {"2"},
 		},
 		RequestType: "application/x-www-form-urlencoded",
 	}
