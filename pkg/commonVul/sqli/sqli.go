@@ -2,6 +2,7 @@ package sqli
 
 import (
 	"AutoScan/pkg/spider"
+	"AutoScan/pkg/utils"
 	"fmt"
 	"github.com/agnivade/levenshtein"
 	"github.com/go-resty/resty/v2"
@@ -82,17 +83,13 @@ type TimeSqlInfo struct {
 	Deviation float64
 }
 
-type Client struct {
-	client *resty.Client
-}
+var client = utils.Client{}
 
-var client = Client{
-	client: resty.New(),
-}
-var mu = &sync.Mutex{}
+//var mu = &sync.Mutex{}
 
 func init() {
-	client.client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
+
+	client.Client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
 	//client.client.SetProxy("http://127.0.0.1:8080")
 }
 func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
@@ -157,7 +154,7 @@ func ErrorSqli(info Spider.RequestInfo) (bool, string) {
 	for i, _ := range info.Params {
 		for _, j := range ERRORDIR {
 			// 发送请求
-			copyMap := GetParams(info)
+			copyMap := utils.GetParams(info)
 			copyMap[i] = copyMap[i] + j
 			resp, err := client.Request(info.URL, info.Method, copyMap, info.RequestType)
 			if err != nil {
@@ -207,7 +204,7 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 	if str {
 		payload = BOOLCHAR
 	}
-	newParams := GetParams(info)
+	newParams := utils.GetParams(info)
 	//for param, _ := range info.Params {
 	//	if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
 	//		newParams[param] = DEFAULT_PARAM
@@ -329,50 +326,6 @@ func TimeSqli(info Spider.RequestInfo) (bool, string) {
 
 }
 
-// 获取请求
-func GetParams(info Spider.RequestInfo) map[string]string {
-	params := make(map[string]string)
-	//params := make(sync.Map)
-	for param, _ := range info.Params {
-		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
-			params[param] = DEFAULT_PARAM
-		}
-		params[param] = info.Params[param][0]
-	}
-	return params
-}
-
-// 发送数据包
-func (c *Client) Request(url string, method string, param map[string]string, requestType string) (*resty.Response, error) {
-	mu.Lock()
-	param["submit"] = "submit"
-	mu.Unlock()
-	if method == "GET" {
-		return c.Get(url, param)
-	} else {
-		return c.Post(url, param, requestType)
-	}
-}
-func (c *Client) Get(url string, param map[string]string) (*resty.Response, error) {
-	tmp := c.client.R()
-	mu.Lock()
-	tmp.SetQueryParams(param)
-	mu.Unlock()
-	return tmp.Get(url)
-
-}
-func (c *Client) Post(url string, param map[string]string, requestType string) (*resty.Response, error) {
-	tmp := c.client.R()
-	mu.Lock()
-	if requestType == "application/json" {
-		tmp.SetBody(param)
-	} else {
-		tmp.SetFormData(param)
-	}
-	mu.Unlock()
-	return tmp.Post(url)
-}
-
 // 检查是否含有SQL注入的错误信息
 func CheckError(resp *resty.Response) bool {
 	for _, pattern := range regexPatterns {
@@ -396,7 +349,7 @@ func CheckBool(resp1 *resty.Response, resp2 *resty.Response) bool {
 
 }
 func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool {
-	params := GetParams(info)
+	params := utils.GetParams(info)
 	true1 := make(map[string]string)
 	true2 := make(map[string]string)
 	false1 := make(map[string]string)
@@ -438,7 +391,7 @@ func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool 
 	return true
 }
 func (t *TimeSqlInfo) CalcTime(info Spider.RequestInfo) {
-	params := GetParams(info)
+	params := utils.GetParams(info)
 	data := []float64{}
 	resultChan := make(chan float64, TIME_REQUEST_TIMES+2)
 	// 使用semaphore限制并发数

@@ -46,28 +46,14 @@ func TestPostRequest(t *testing.T) {
 	//client.SetProxy("http://127.0.0.1:8080")
 	resp, err := client.R().
 		SetFormData(map[string]string{
-			"xml":    "a",
+			"name":   "1%df'+or+1=1+--+",
 			"submit": "submit",
-		}).Post("http://127.0.0.1/pikachu/vul/xxe/xxe_1.php")
+		}).Post("http://testing.com/pikachu/vul/sqli/sqli_widebyte.php")
 	if err != nil {
 		t.Error("Error:", err)
 		return
 	}
-	t.Log("resp String:", resp.String())
-	t.Log("resp StatusCode:", resp.StatusCode())
-	t.Log("resp Status:", resp.Status())
-	t.Log("resp Header:", resp.Header())
-	t.Log("resp Time:", resp.Time())
-	t.Log("resp Error:", err)
-	resp, err = client.R().
-		SetBody(map[string]string{
-			"xml":    "a",
-			"submit": "submit",
-		}).Post("http://127.0.0.1/pikachu/vul/xxe/xxe_1.php")
-	if err != nil {
-		t.Error("Error:", err)
-		return
-	}
+	t.Log("resp String")
 	t.Log("resp String:", resp.String())
 	t.Log("resp StatusCode:", resp.StatusCode())
 	t.Log("resp Status:", resp.Status())
