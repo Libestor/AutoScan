@@ -10,7 +10,16 @@ var DEFAULT_PARAM = "1"
 
 type Client struct {
 	Client *resty.Client
-	mu     sync.Mutex
+	mu     *sync.Mutex
+}
+
+func (c *Client) InitClient() {
+	client := resty.New()
+	client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
+
+	mu := sync.Mutex{}
+	c.Client = client
+	c.mu = &mu
 }
 
 // 获取请求
