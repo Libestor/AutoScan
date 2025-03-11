@@ -38,6 +38,7 @@ const (
 	chromePath       = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
 )
 
+// NewSpider 初始化爬虫
 func NewSpider() (*Spider, error) {
 	// 初始化Chrome驱动
 	service, err := selenium.NewChromeDriverService(chromeDriverPath, 4444)
@@ -90,6 +91,7 @@ func NewSpider() (*Spider, error) {
 	return spider, nil
 }
 
+// Start 启动爬虫扫描
 func (s *Spider) Start(startUrl string, baseDomain string) error {
 	s.baseDomain = baseDomain
 	s.addurlQueue(startUrl)
@@ -114,7 +116,7 @@ func (s *Spider) Stop() {
 	s.service.Stop()
 }
 
-// 设置cookie
+// setCookies 设置cookie
 func (s *Spider) setCookies() error {
 	cookies := []selenium.Cookie{
 		{Name: "token", Value: ""},
@@ -129,7 +131,7 @@ func (s *Spider) setCookies() error {
 	return nil
 }
 
-// 关闭弹窗
+// disablePrompt 关闭弹窗
 func (s *Spider) disablePrompt() {
 	// 关闭弹窗
 	_, err := s.driver.ExecuteScript("window.alert = function() {};", nil)
@@ -147,7 +149,7 @@ func (s *Spider) disablePrompt() {
 
 }
 
-// 开始循环进行动态爬取
+// dynamicSpider 开始循环进行动态爬取
 func (s *Spider) dynamicSpider() {
 	for {
 		select {

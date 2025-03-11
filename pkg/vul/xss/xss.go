@@ -77,6 +77,7 @@ func init() {
 	client.InitClient()
 }
 
+// GetDriver 获得一个浏览器驱动
 func GetDriver() selenium.WebDriver {
 	Driver, err := selenium.NewRemote(server.caps, "")
 	if err != nil {
@@ -85,6 +86,7 @@ func GetDriver() selenium.WebDriver {
 	return Driver
 }
 
+// RunXssScan 启动XSS扫描
 func RunXssScan(rawData []Spider.RequestInfo) []XssResult {
 	data := []*XssResult{}
 	wg := sync.WaitGroup{}
@@ -119,6 +121,7 @@ func RunXssScan(rawData []Spider.RequestInfo) []XssResult {
 	return results
 }
 
+// TestXSS 单个XSS测试的核心函数
 func (r *XssResult) TestXSS() {
 	// Get请求使用反射型XSS
 	if r.Method == "GET" {
@@ -189,6 +192,8 @@ func (r *XssResult) GetReflectXssPayloads() map[string]string {
 	}
 	return payloads
 }
+
+// GetStoreXssPayloads 获取xss储存型的payload
 func (r *XssResult) GetStoreXssPayloads() map[string]map[string]string {
 	payloads := make(map[string]map[string]string)
 	for key, _ := range r.Params {
@@ -207,6 +212,8 @@ func (r *XssResult) GetStoreXssPayloads() map[string]map[string]string {
 	}
 	return payloads
 }
+
+// CheckReflectXss 检查是否为反射型XSS
 func (r *XssResult) CheckReflectXss(url string, text string) bool {
 
 	err := r.Driver.Get(url)
@@ -230,6 +237,8 @@ func (r *XssResult) CheckReflectXss(url string, text string) bool {
 		return false
 	}
 }
+
+// CheckAlert 检查是否存在alert弹窗
 func (r *XssResult) CheckAlert() (bool, []string) {
 	result := []string{}
 	for {
@@ -247,6 +256,7 @@ func (r *XssResult) CheckAlert() (bool, []string) {
 	}
 }
 
+// CheckStoreXss 检查是否为存储型XSS
 func (r *XssResult) CheckStoreXss(url string, AlertText []string) (bool, string) {
 	r.Driver.Get(url)
 	// 检查是否存在alert弹窗
@@ -264,6 +274,7 @@ func (r *XssResult) CheckStoreXss(url string, AlertText []string) (bool, string)
 	return false, ""
 }
 
+// GetRandString 获取随机四位的字符串
 func GetRandString() string {
 	b := make([]byte, 4)
 	for i := range b {

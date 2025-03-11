@@ -49,7 +49,7 @@ func (e ValidationError) Error() string {
 	return fmt.Sprintf("validation error: field %s %s", e.Field, e.Message)
 }
 
-// 解析并验证
+// LoadAndValidateTemplate 解析并验证
 func LoadAndValidateTemplate(path string) (*Template, []error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -64,7 +64,7 @@ func LoadAndValidateTemplate(path string) (*Template, []error) {
 	return &tpl, tpl.Validate()
 }
 
-// 结构体验证方法
+// Validate 验证POC文件
 func (t *Template) Validate() []error {
 	var errors []error
 
@@ -152,7 +152,7 @@ func (t *Template) Validate() []error {
 	return errors
 }
 
-// 加载配置
+// LoadYamlPoc 加载配置
 func LoadYamlPoc(dirPath string) ([]*Template, []error) {
 	var (
 		wg         sync.WaitGroup
@@ -199,7 +199,7 @@ func LoadYamlPoc(dirPath string) ([]*Template, []error) {
 	return configYaml, errors
 }
 
-// 获取YAML文件列表
+// getYamlFiles 获取YAML文件列表
 func getYamlFiles(dir string) ([]string, error) {
 	var yamlFiles []string
 
@@ -217,7 +217,7 @@ func getYamlFiles(dir string) ([]string, error) {
 	return yamlFiles, nil
 }
 
-// 文件扩展名检测
+// isYamlFile 文件扩展名检测
 func isYamlFile(name string) bool {
 	ext := filepath.Ext(name)
 	return ext == ".yaml" || ext == ".yml"

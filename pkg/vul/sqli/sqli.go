@@ -92,6 +92,8 @@ func init() {
 	//client.Client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
 	//client.client.SetProxy("http://127.0.0.1:8080")
 }
+
+// RunSqlScan 启动SQL注入扫描
 func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
 	data := []*SqlResult{}
 	wg := sync.WaitGroup{}
@@ -124,6 +126,8 @@ func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
 	}
 	return results
 }
+
+// TestSqli 单个请求验证的核心函数
 func (s *SqlResult) TestSqli(info Spider.RequestInfo) {
 	if res, target := ErrorSqli(info); res {
 		s.IsSqli = true
@@ -148,7 +152,7 @@ func (s *SqlResult) TestSqli(info Spider.RequestInfo) {
 	return
 }
 
-// 判断回显是否为SQL注入
+// ErrorSqli 判断回显是否为SQL报错
 func ErrorSqli(info Spider.RequestInfo) (bool, string) {
 	//var resp *resty.Response
 	for i, _ := range info.Params {
@@ -170,7 +174,7 @@ func ErrorSqli(info Spider.RequestInfo) (bool, string) {
 	return false, ""
 }
 
-// 布尔盲注
+// BoolSqli 布尔盲注检测
 func BoolSqli(info Spider.RequestInfo) (bool, string) {
 	// 遍历参数,并设置默认值
 	for param, _ := range info.Params {
@@ -198,19 +202,13 @@ func BoolSqli(info Spider.RequestInfo) (bool, string) {
 	return false, ""
 }
 
-// 数字bool和字符bool的执行函数
+// OnceBoolSqli 数字bool和字符bool的执行函数
 func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 	payload := BOOLNUMDIR
 	if str {
 		payload = BOOLCHAR
 	}
 	newParams := utils.GetParams(info)
-	//for param, _ := range info.Params {
-	//	if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
-	//		newParams[param] = DEFAULT_PARAM
-	//	}
-	//	newParams[param] = info.Params[param][0]
-	//}
 	true1 := make(map[string]string)
 	true2 := make(map[string]string)
 	false1 := make(map[string]string)
@@ -307,7 +305,7 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 
 }
 
-// 时间盲注
+// TimeSqli 时间盲注
 func TimeSqli(info Spider.RequestInfo) (bool, string) {
 	// 遍历参数,并设置默认值
 	for param, _ := range info.Params {
@@ -326,7 +324,7 @@ func TimeSqli(info Spider.RequestInfo) (bool, string) {
 
 }
 
-// 检查是否含有SQL注入的错误信息
+// CheckError 检查是否含有SQL注入的错误信息
 func CheckError(resp *resty.Response) bool {
 	for _, pattern := range regexPatterns {
 		// 检查响应体是否匹配正则表达式
@@ -336,6 +334,8 @@ func CheckError(resp *resty.Response) bool {
 	}
 	return false
 }
+
+// CheckBool 计算相似度，确定网页是否相似
 func CheckBool(resp1 *resty.Response, resp2 *resty.Response) bool {
 	distance := levenshtein.ComputeDistance(resp1.String(), resp2.String())
 	maxLen := math.Max(float64(len(resp1.String())), float64(len(resp2.String())))
@@ -348,6 +348,8 @@ func CheckBool(resp1 *resty.Response, resp2 *resty.Response) bool {
 	return false
 
 }
+
+// OnceTimeSqli 时间盲注的核心函数
 func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool {
 	params := utils.GetParams(info)
 	true1 := make(map[string]string)
@@ -390,6 +392,8 @@ func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool 
 	}
 	return true
 }
+
+// CalcTime 计算该网站的平均相应时间和标准差
 func (t *TimeSqlInfo) CalcTime(info Spider.RequestInfo) {
 	params := utils.GetParams(info)
 	data := []float64{}

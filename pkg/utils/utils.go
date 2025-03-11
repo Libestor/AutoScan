@@ -13,6 +13,7 @@ type Client struct {
 	mu     *sync.Mutex
 }
 
+// InitClient 初始化客户端
 func (c *Client) InitClient() {
 	client := resty.New()
 	client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3")
@@ -22,7 +23,7 @@ func (c *Client) InitClient() {
 	c.mu = &mu
 }
 
-// 获取请求
+// GetParams 获取请求
 func GetParams(info Spider.RequestInfo) map[string]string {
 	params := make(map[string]string)
 	//params := make(sync.Map)
@@ -37,7 +38,7 @@ func GetParams(info Spider.RequestInfo) map[string]string {
 	return params
 }
 
-// 发送数据包
+// Request 发送数据包
 func (c *Client) Request(url string, method string, param map[string]string, requestType string) (*resty.Response, error) {
 	c.mu.Lock()
 	param["submit"] = "submit"
