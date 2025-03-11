@@ -3,10 +3,17 @@ package utils
 import (
 	Spider "AutoScan/pkg/spider"
 	"github.com/go-resty/resty/v2"
+	"math/rand"
 	"sync"
+	"time"
 )
 
-const DefaultParam = "1"
+const (
+	DefaultParam = "1"
+	CHAARSET     = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+)
+
+var Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 type Client struct {
 	Client *resty.Client
@@ -67,4 +74,13 @@ func (c *Client) Post(url string, param map[string]string, requestType string) (
 	}
 	c.mu.Unlock()
 	return tmp.Post(url)
+}
+
+// GetRandString 获取随机四位的字符串
+func GetRandString() string {
+	b := make([]byte, 4)
+	for i := range b {
+		b[i] = CHAARSET[Rand.Intn(len(CHAARSET))]
+	}
+	return string(b)
 }

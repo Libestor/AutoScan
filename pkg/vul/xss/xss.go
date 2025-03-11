@@ -7,17 +7,14 @@ import (
 	"github.com/tebeka/selenium"
 	"github.com/tebeka/selenium/chrome"
 	"log"
-	"math/rand"
 	"net/url"
 	"sync"
-	"time"
 )
 
 const (
 	chromeDriverPath = "C:\\Users\\你好，五月\\Desktop\\实验组\\毕业设计\\chromedriver-win64\\chromedriver-win64\\chromedriver.exe"
 	chromePath       = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
 	MAX_GOROUTINES   = 10
-	CHAARSET         = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 )
 
 var PAYLOADS = []string{
@@ -42,7 +39,6 @@ type XssResult struct {
 type WebDriverServer struct {
 	//Driver  selenium.WebDriver
 	Service *selenium.Service
-	Rand    *rand.Rand
 	caps    selenium.Capabilities
 }
 
@@ -72,7 +68,6 @@ func init() {
 		},
 	}
 	server.caps.AddChrome(chromeCaps)
-	server.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	client.InitClient()
 }
 
@@ -171,7 +166,7 @@ func (r *XssResult) GetReflectXssPayloads() map[string]string {
 	payloads := make(map[string]string)
 	for key := range r.Params {
 		for _, payload := range PAYLOADS {
-			rStr := GetRandString()
+			rStr := utils.GetRandString()
 			value := url.Values{}
 			for k, v := range r.Params {
 				if k == key {
@@ -197,7 +192,7 @@ func (r *XssResult) GetStoreXssPayloads() map[string]map[string]string {
 	payloads := make(map[string]map[string]string)
 	for key := range r.Params {
 		for _, payload := range PAYLOADS {
-			rStr := GetRandString()
+			rStr := utils.GetRandString()
 			value := map[string]string{}
 			for k, v := range r.Params {
 				if k == key {
@@ -275,13 +270,4 @@ func (r *XssResult) CheckStoreXss(url string, AlertText []string) (bool, string)
 		}
 	}
 	return false, ""
-}
-
-// GetRandString 获取随机四位的字符串
-func GetRandString() string {
-	b := make([]byte, 4)
-	for i := range b {
-		b[i] = CHAARSET[server.Rand.Intn(len(CHAARSET))]
-	}
-	return string(b)
 }
