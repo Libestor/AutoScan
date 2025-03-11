@@ -8,7 +8,6 @@ import (
 	"github.com/agnivade/levenshtein"
 	"github.com/go-resty/resty/v2"
 	"math"
-	"math/rand"
 	"os"
 	"testing"
 )
@@ -62,22 +61,18 @@ func TestPostRequest(t *testing.T) {
 	t.Log("resp Error:", err)
 }
 
-func getRandData() Spider.RequestInfo {
-	getData := getData()
-	num := rand.Intn(len(getData) - 1)
-	return getData[num]
-}
-func getOneData() Spider.RequestInfo {
-	getData := getData()
-	return getData[0]
-}
 func getData() []Spider.RequestInfo {
 	rawData := []Spider.RequestInfo{}
 	jsonFile, err := os.Open("pikachu.json")
 	if err != nil {
 		fmt.Println("Error opening JSON file:", err)
 	}
-	defer jsonFile.Close()
+	defer func(jsonFile *os.File) {
+		err := jsonFile.Close()
+		if err != nil {
+
+		}
+	}(jsonFile)
 	decoder := json.NewDecoder(jsonFile)
 	err = decoder.Decode(&rawData)
 	if err != nil {

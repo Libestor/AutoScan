@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-var DEFAULT_PARAM = "1"
+const DefaultParam = "1"
 
 type Client struct {
 	Client *resty.Client
@@ -27,9 +27,9 @@ func (c *Client) InitClient() {
 func GetParams(info Spider.RequestInfo) map[string]string {
 	params := make(map[string]string)
 	//params := make(sync.Map)
-	for param, _ := range info.Params {
+	for param := range info.Params {
 		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
-			params[param] = DEFAULT_PARAM
+			params[param] = DefaultParam
 		}
 		params[param] = info.Params[param][0]
 	}

@@ -2,7 +2,7 @@ package test
 
 import (
 	Spider "AutoScan/pkg/spider"
-	xss "AutoScan/pkg/vul/xss"
+	"AutoScan/pkg/vul/xss"
 	"net/url"
 	"strings"
 	"testing"
@@ -29,14 +29,14 @@ func TestRunXssScan(t *testing.T) {
 	}
 }
 func TestCheckReflectXss(t *testing.T) {
-	url := "http://127.0.0.1/pikachu/vul/xss/xss_reflected_get.php?message=<script>prompt('cqupt');</script>&submit=submit"
+	URL := "http://127.0.0.1/pikachu/vul/xss/xss_reflected_get.php?message=<script>prompt('cqupt');</script>&submit=submit"
 	text := "cqupt"
 	xssResult := xss.XssResult{
 		Driver: xss.GetDriver(),
-		URL:    url,
+		URL:    URL,
 		Method: "GET",
 	}
-	result := xssResult.CheckReflectXss(url, text)
+	result := xssResult.CheckReflectXss(URL, text)
 	if !result {
 		t.Errorf("CheckReflectXss() = %v, want %v", result, true)
 	}

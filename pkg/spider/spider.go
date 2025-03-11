@@ -96,7 +96,11 @@ func (s *Spider) Start(startUrl string, baseDomain string) error {
 	s.baseDomain = baseDomain
 	s.addurlQueue(startUrl)
 	s.urlQueue <- startUrl
-	s.driver.Get(startUrl)
+	err2 := s.driver.Get(startUrl)
+	if err2 != nil {
+		fmt.Println("Start Error Get URL:", startUrl)
+		return err2
+	}
 	// 设置Cookie
 	err := s.setCookies()
 	if err != nil {
@@ -112,8 +116,14 @@ func (s *Spider) Start(startUrl string, baseDomain string) error {
 }
 func (s *Spider) Stop() {
 	close(s.urlQueue)
-	s.driver.Quit()
-	s.service.Stop()
+	err := s.driver.Quit()
+	if err != nil {
+		fmt.Println("Stop Error Quit driver:", err)
+	}
+	err = s.service.Stop()
+	if err != nil {
+		fmt.Println("Stop Error Stop service:", err)
+	}
 }
 
 // setCookies 设置cookie
@@ -271,24 +281,39 @@ func (s *Spider) processForms() {
 			case "input":
 				switch inputType {
 				case "text", "email", "search", "password":
-					input.SendKeys("spider_test_data")
+					err = input.SendKeys("spider_test_data")
+					if err != nil {
+						fmt.Printf("processForms Error sending keys to input: %v\n", err)
+					}
 				case "checkbox", "radio":
-					input.Click()
+					err = input.Click()
+					if err != nil {
+						fmt.Printf("processForms Error clicking input: %v\n", err)
+					}
 				}
 			case "textarea":
-				input.SendKeys("spider_test_content")
+				err = input.SendKeys("spider_test_content")
+				if err != nil {
+					fmt.Printf("processForms Error sending keys to textarea: %v\n", err)
+				}
 			case "select":
 				options, _ := input.FindElements(selenium.ByTagName, "option")
 				if len(options) > 0 {
-					options[0].Click()
+					err = options[0].Click()
+					if err != nil {
+						fmt.Printf("processForms Error clicking select option: %v\n", err)
+					}
 				}
 			}
 
 		}
 
-		if err := form.Submit(); err == nil {
+		if err = form.Submit(); err == nil {
 			time.Sleep(100 * time.Millisecond)
-			s.driver.Back()
+			err = s.driver.Back()
+			if err != nil {
+				fmt.Printf("processForms Error navigating back: %v\n", err)
+			}
 		}
 	}
 }
@@ -344,15 +369,15 @@ func (s *Spider) handleInteractiveElements() {
 			elem = current_elements[index]
 			if isVisible, _ := elem.IsDisplayed(); isVisible && !s.isUnicquElement(elem) {
 				initialURL, _ := s.driver.CurrentURL()
-				//if s.isUnicquElement(elem) {
-				//	continue
-				//}
-				if err := s.clickWithJS(elem); err == nil {
+				if err = s.clickWithJS(elem); err == nil {
 					time.Sleep(100 * time.Millisecond)
 					s.processNetworkRequests()
 					newURL, _ := s.driver.CurrentURL()
 					if newURL != initialURL {
-						s.driver.Back()
+						err = s.driver.Back()
+						if err != nil {
+							fmt.Printf("handleInteractiveElements Error navigating back: %v\n", err)
+						}
 					}
 				}
 			}
@@ -366,9 +391,16 @@ func (s *Spider) processPageContent() {
 	// 处理iframe
 	frames, _ := s.driver.FindElements(selenium.ByTagName, "iframe")
 	for _, frame := range frames {
-		s.driver.SwitchFrame(frame)
+		err := s.driver.SwitchFrame(frame)
+		if err != nil {
+			fmt.Printf("Error switching to iframe: %v\n", err)
+			continue
+		}
 		s.extractLinks(selenium.ByTagName, "a")
-		s.driver.SwitchFrame(nil)
+		err = s.driver.SwitchFrame(nil)
+		if err != nil {
+			fmt.Printf("Error switching back to parent frame: %v\n", err)
+		}
 	}
 }
 

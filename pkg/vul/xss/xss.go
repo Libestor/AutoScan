@@ -46,7 +46,6 @@ type WebDriverServer struct {
 	caps    selenium.Capabilities
 }
 
-var randXss *rand.Rand
 var server WebDriverServer
 var client utils.Client
 
@@ -170,7 +169,7 @@ func (r *XssResult) TestXSS() {
 // GetReflectXssPayloads 获取反射型XSS的payload
 func (r *XssResult) GetReflectXssPayloads() map[string]string {
 	payloads := make(map[string]string)
-	for key, _ := range r.Params {
+	for key := range r.Params {
 		for _, payload := range PAYLOADS {
 			rStr := GetRandString()
 			value := url.Values{}
@@ -196,7 +195,7 @@ func (r *XssResult) GetReflectXssPayloads() map[string]string {
 // GetStoreXssPayloads 获取xss储存型的payload
 func (r *XssResult) GetStoreXssPayloads() map[string]map[string]string {
 	payloads := make(map[string]map[string]string)
-	for key, _ := range r.Params {
+	for key := range r.Params {
 		for _, payload := range PAYLOADS {
 			rStr := GetRandString()
 			value := map[string]string{}
@@ -258,7 +257,11 @@ func (r *XssResult) CheckAlert() (bool, []string) {
 
 // CheckStoreXss 检查是否为存储型XSS
 func (r *XssResult) CheckStoreXss(url string, AlertText []string) (bool, string) {
-	r.Driver.Get(url)
+	err := r.Driver.Get(url)
+	if err != nil {
+		fmt.Println("CheckStoreXss Get url error:", err)
+		return false, ""
+	}
 	// 检查是否存在alert弹窗
 	alert, texts := r.CheckAlert()
 

@@ -15,7 +15,7 @@ import (
 	"sync"
 )
 
-// 触发SQL错误的字符
+// ERRORDIR 触发SQL错误的字符
 var ERRORDIR = []string{
 	"'",
 	"\"",
@@ -23,16 +23,14 @@ var ERRORDIR = []string{
 	"%BF",
 }
 
-// 参数为空时的默认值
-var DEFAULT_PARAM = "1"
+const (
+	SIMILARITY       = 0.99999
+	DefaultParam     = "1"
+	TimeRequestTimes = 30
+	MaxGoroutines    = 10
+)
 
-// 相似度
-var SIMILARITY = 0.99999
-
-// 时间盲注的请求次数
-var TIME_REQUEST_TIMES = 30
-
-// BOOL数字盲注
+// BOOLNUMDIR BOOL数字盲注
 var BOOLNUMDIR = map[string]string{
 	"true1":  " OR 2025=2025 LIMIT 1 -- ",
 	"true2":  " OR 2021=2021 LIMIT 1 -- ",
@@ -40,7 +38,7 @@ var BOOLNUMDIR = map[string]string{
 	"false2": " AND 21=25",
 }
 
-// BOOL字符盲注
+// BOOLCHAR BOOL字符盲注
 var BOOLCHAR = map[string]string{
 	"true1":  "' OR 2025=2025 LIMIT 1 -- ",
 	"true2":  "' OR 2021=2021 LIMIT 1 -- ",
@@ -48,7 +46,7 @@ var BOOLCHAR = map[string]string{
 	"false2": "' AND 21=25 LIMIT 1 -- ",
 }
 
-// TIME盲注
+// TIMEDIR TIME盲注
 var TIMEDIR = map[string]string{
 	"true1": "' AND (SELECT 2025 FROM (SELECT(SLEEP(5)))CQUPT) AND 'CQUPT'='CQUPT",
 	"true2": "' AND (SELECT 2021 FROM (SELECT(SLEEP(4)))CQUPT) AND 'cqupt'='cqupt",
@@ -64,9 +62,6 @@ var regexPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)(query error: )`),
 }
 
-// 最大协程数量
-var MAX_GOROUTINES = 10
-
 type SqlResult struct {
 	URL         string
 	Method      string
@@ -77,7 +72,7 @@ type SqlResult struct {
 	Note        string
 }
 
-// 时间盲注结构体
+// TimeSqlInfo 时间盲注结构体
 type TimeSqlInfo struct {
 	Average   float64
 	Deviation float64
@@ -85,20 +80,16 @@ type TimeSqlInfo struct {
 
 var client = utils.Client{}
 
-//var mu = &sync.Mutex{}
-
 func init() {
 	client.InitClient()
-	//client.Client.SetHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
-	//client.client.SetProxy("http://127.0.0.1:8080")
 }
 
 // RunSqlScan 启动SQL注入扫描
 func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
-	data := []*SqlResult{}
+	var data []*SqlResult
 	wg := sync.WaitGroup{}
 	// 用信号量来控制并发数量
-	sem := make(chan struct{}, MAX_GOROUTINES)
+	sem := make(chan struct{}, MaxGoroutines)
 	defer close(sem)
 	// 并发测试
 	for _, info := range rawData {
@@ -120,7 +111,7 @@ func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
 	}
 	wg.Wait()
 	fmt.Println("sql注入测试完毕")
-	results := []SqlResult{}
+	var results []SqlResult
 	for _, i := range data {
 		results = append(results, *i)
 	}
@@ -155,7 +146,7 @@ func (s *SqlResult) TestSqli(info Spider.RequestInfo) {
 // ErrorSqli 判断回显是否为SQL报错
 func ErrorSqli(info Spider.RequestInfo) (bool, string) {
 	//var resp *resty.Response
-	for i, _ := range info.Params {
+	for i := range info.Params {
 		for _, j := range ERRORDIR {
 			// 发送请求
 			copyMap := utils.GetParams(info)
@@ -177,12 +168,12 @@ func ErrorSqli(info Spider.RequestInfo) (bool, string) {
 // BoolSqli 布尔盲注检测
 func BoolSqli(info Spider.RequestInfo) (bool, string) {
 	// 遍历参数,并设置默认值
-	for param, _ := range info.Params {
+	for param := range info.Params {
 		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
-			info.Params[param] = []string{DEFAULT_PARAM}
+			info.Params[param] = []string{DefaultParam}
 		}
 	}
-	for i, _ := range info.Params {
+	for i := range info.Params {
 		_, err := strconv.Atoi(info.Params[i][0])
 		if err != nil {
 			// 字符型
@@ -213,10 +204,14 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 	true2 := make(map[string]string)
 	false1 := make(map[string]string)
 	false2 := make(map[string]string)
-	copier.Copy(&true1, &newParams)
-	copier.Copy(&true2, &newParams)
-	copier.Copy(&false1, &newParams)
-	copier.Copy(&false2, &newParams)
+	err := copier.Copy(&true1, &newParams)
+	err1 := copier.Copy(&true2, &newParams)
+	err2 := copier.Copy(&false1, &newParams)
+	err3 := copier.Copy(&false2, &newParams)
+	if err != nil || err1 != nil || err2 != nil || err3 != nil {
+		fmt.Println("OnceBoolSqli copy error:", err, err1, err2, err3)
+		return false
+	}
 	true1[target] = true1[target] + payload["true1"]
 	true2[target] = true2[target] + payload["true2"]
 	false1[target] = false1[target] + payload["false1"]
@@ -308,14 +303,14 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 // TimeSqli 时间盲注
 func TimeSqli(info Spider.RequestInfo) (bool, string) {
 	// 遍历参数,并设置默认值
-	for param, _ := range info.Params {
+	for param := range info.Params {
 		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
-			info.Params[param] = []string{DEFAULT_PARAM}
+			info.Params[param] = []string{DefaultParam}
 		}
 	}
 	timeInfo := TimeSqlInfo{}
 	timeInfo.CalcTime(info)
-	for i, _ := range info.Params {
+	for i := range info.Params {
 		if timeInfo.OnceTimeSqli(info, i) {
 			return true, i
 		}
@@ -355,9 +350,13 @@ func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool 
 	true1 := make(map[string]string)
 	true2 := make(map[string]string)
 	false1 := make(map[string]string)
-	copier.Copy(&true1, &params)
-	copier.Copy(&true2, &params)
-	copier.Copy(&false1, &params)
+	err := copier.Copy(&true1, &params)
+	err1 := copier.Copy(&true2, &params)
+	err2 := copier.Copy(&false1, &params)
+	if err != nil || err1 != nil || err2 != nil {
+		fmt.Println("OnceTimeSqli copy error:", err, err1, err2)
+		return false
+	}
 	true1[target] = true1[target] + TIMEDIR["true1"]
 	true2[target] = true2[target] + TIMEDIR["true2"]
 	false1[target] = false1[target] + TIMEDIR["false"]
@@ -397,12 +396,12 @@ func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool 
 func (t *TimeSqlInfo) CalcTime(info Spider.RequestInfo) {
 	params := utils.GetParams(info)
 	data := []float64{}
-	resultChan := make(chan float64, TIME_REQUEST_TIMES+2)
+	resultChan := make(chan float64, TimeRequestTimes+2)
 	// 使用semaphore限制并发数
-	sem := make(chan struct{}, MAX_GOROUTINES)
+	sem := make(chan struct{}, MaxGoroutines)
 	wg := sync.WaitGroup{}
 	// 需要去除最大值和最小值
-	for i := 0; i < TIME_REQUEST_TIMES+2; i++ {
+	for i := 0; i < TimeRequestTimes+2; i++ {
 		// 发送请求
 		sem <- struct{}{}
 		wg.Add(1)
