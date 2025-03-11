@@ -20,10 +20,13 @@ func TestLoadYamlConfigs(t *testing.T) {
 	}
 	pretty.Println(configs)
 }
-func TestLoadYamlPoc(t *testing.T) {
-	yamlPoc, errors := poc.LoadYamlPoc("./pocYaml/")
-	for _, err := range errors {
-		t.Error(err)
-	}
-	pretty.Println(yamlPoc)
+func TestUseOnePoc(t *testing.T) {
+	dirPath := "./pocYaml/thinkphp5-rce-invokefunction.yaml "
+	targetPath := "http://127.0.0.1/thinkphp5.0/public/"
+	poc.UseOnePoc(targetPath, dirPath)
+}
+func TestAllPoc(t *testing.T) {
+	dirPath := "./pocYaml/"
+	targetPath := "http://127.0.0.1/thinkphp5.0/public/"
+	poc.UseAllPoc(targetPath, dirPath)
 }

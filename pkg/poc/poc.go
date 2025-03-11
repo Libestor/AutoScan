@@ -9,10 +9,15 @@ import (
 	"sync"
 )
 
+const (
+	MaxReadFileGoroutine = 100
+	MaxPocGoroutine      = 100
+)
+
 type Template struct {
 	ID       string    `yaml:"id"`
 	Info     Info      `yaml:"info"`
-	Requests []Request `yaml:"requests"`
+	Requests []Request `yaml:"requests" yaml:"http"`
 	Vail     bool
 }
 
@@ -37,6 +42,7 @@ type Matcher struct {
 	Words     []string `yaml:"words,omitempty"`
 	Status    []int    `yaml:"status,omitempty"`
 	Condition string   `yaml:"condition,omitempty"`
+	Regex     []string `yaml:"regex,omitempty"`
 }
 
 // ValidationError 定义验证错误类型
@@ -49,7 +55,7 @@ func (e ValidationError) Error() string {
 	return fmt.Sprintf("validation error: field %s %s", e.Field, e.Message)
 }
 
-// LoadAndValidateTemplate 解析并验证
+// LoadAndValidateTemplate 解析单个Poc并验证
 func LoadAndValidateTemplate(path string) (*Template, []error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -61,11 +67,11 @@ func LoadAndValidateTemplate(path string) (*Template, []error) {
 		return nil, []error{fmt.Errorf("YAML %s 解析失败: %w", path, err)}
 	}
 
-	return &tpl, tpl.Validate()
+	return &tpl, tpl.PocFileValidate()
 }
 
-// Validate 验证POC文件
-func (t *Template) Validate() []error {
+// PocFileValidate 验证POC文件
+func (t *Template) PocFileValidate() []error {
 	var errors []error
 
 	// ID
@@ -146,28 +152,39 @@ func (t *Template) Validate() []error {
 				})
 				t.Vail = false
 			}
+			if matcher.Condition == "" {
+				matcher.Condition = "and"
+			}
+			if matcher.Condition != "and" && matcher.Condition != "or" {
+				errors = append(errors, ValidationError{
+					Field:   matcherPrefix + ".condition",
+					Message: fmt.Sprintf("无效条件 '%s'", matcher.Condition),
+				})
+			}
+		}
+		if req.MatchersCondition == "" {
+			req.MatchersCondition = "and"
 		}
 	}
 	t.Vail = true
 	return errors
 }
 
-// LoadYamlPoc 加载配置
-func LoadYamlPoc(dirPath string) ([]*Template, []error) {
+// LoadYamlPoc 加载POC配置
+func LoadYamlPoc(dirPath string) (*[]*Template, []error) {
 	var (
 		wg         sync.WaitGroup
 		configChan = make(chan *Template)
 		errorChan  = make(chan error)
 		configYaml []*Template
 		errors     []error
+		semaphore  = make(chan struct{}, MaxReadFileGoroutine)
 	)
-
 	// 扫描目录
 	files, err := getYamlFiles(dirPath)
 	if err != nil {
 		return nil, []error{err}
 	}
-
 	// 结果收集
 	go func() {
 		for cfg := range configChan {
@@ -179,10 +196,10 @@ func LoadYamlPoc(dirPath string) ([]*Template, []error) {
 			errors = append(errors, err)
 		}
 	}()
-
 	// 并发解析
 	for _, file := range files {
 		wg.Add(1)
+		semaphore <- struct{}{}
 		go func(path string) {
 			defer wg.Done()
 			cfg, err := LoadAndValidateTemplate(path)
@@ -190,13 +207,14 @@ func LoadYamlPoc(dirPath string) ([]*Template, []error) {
 			for _, err := range err {
 				errorChan <- err
 			}
+			<-semaphore
 		}(file)
 	}
-
 	wg.Wait()
 	close(configChan)
 	close(errorChan)
-	return configYaml, errors
+	close(semaphore)
+	return &configYaml, errors
 }
 
 // getYamlFiles 获取YAML文件列表

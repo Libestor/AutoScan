@@ -2,6 +2,7 @@ package test
 
 import (
 	Spider "AutoScan/pkg/spider"
+	"AutoScan/pkg/utils"
 	"AutoScan/pkg/vul/xss"
 	"net/url"
 	"strings"
@@ -43,7 +44,7 @@ func TestCheckReflectXss(t *testing.T) {
 }
 func TestGetRandomString(t *testing.T) {
 	for i := 0; i < 10; i++ {
-		result := xss.GetRandString()
+		result := utils.GetRandString()
 		t.Logf("GetRandomString() = %s", result)
 	}
 	// 目标 URL
