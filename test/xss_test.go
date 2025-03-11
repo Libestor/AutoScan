@@ -1,8 +1,8 @@
 package test
 
 import (
-	xss "AutoScan/pkg/commonVul/xss"
 	Spider "AutoScan/pkg/spider"
+	xss "AutoScan/pkg/vul/xss"
 	"net/url"
 	"strings"
 	"testing"

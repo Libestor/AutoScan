@@ -1,8 +1,8 @@
 package test
 
 import (
-	"AutoScan/pkg/commonVul/sqli"
 	Spider "AutoScan/pkg/spider"
+	"AutoScan/pkg/vul/sqli"
 	"encoding/json"
 	"fmt"
 	"github.com/agnivade/levenshtein"
