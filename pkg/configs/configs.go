@@ -6,7 +6,6 @@ import (
 	"github.com/fatih/color"
 	"gopkg.in/yaml.v3"
 	"os"
-	"sync"
 )
 
 type Config struct {
@@ -38,7 +37,6 @@ type pocConfig struct {
 
 var (
 	instance   Config
-	once       sync.Once
 	configPath string // 存储动态传入的路径
 )
 
