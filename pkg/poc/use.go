@@ -37,6 +37,9 @@ func UseAllPoc(targetUrl string, dir_path string) {
 	placeholders := BuildPlaceHolders(parseUrl)
 	// 遍历POC并验证
 	for _, poc := range *template {
+		if poc.Vail == false {
+			continue
+		}
 		wg.Add(1)
 		semaphore <- struct{}{}
 		go func(poc *Template) {
