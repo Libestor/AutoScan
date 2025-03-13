@@ -1,10 +1,12 @@
 package Spider
 
 import (
+	"AutoScan/pkg/configs"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/fatih/color"
 	"log"
 	URL "net/url"
 	"sort"
@@ -33,13 +35,23 @@ type Spider struct {
 	baseDomain string
 }
 
-const (
-	chromeDriverPath = "C:\\Users\\你好，五月\\Desktop\\实验组\\毕业设计\\chromedriver-win64\\chromedriver-win64\\chromedriver.exe"
-	chromePath       = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+var (
+	chromeDriverPath = ""
+	chromePath       = ""
 )
 
 // NewSpider 初始化爬虫
 func NewSpider() (*Spider, error) {
+	if !configs.CheckChrome() {
+		fmt.Printf("[%s] Chrome 模块初始化失败，Spider模块退出\n", color.RedString("ERROR"))
+		return nil, fmt.Errorf("Chrome 模块初始化失败")
+	}
+	// 初始化变量
+	chromeDriverPath = configs.GetConfig().ChromeDriverPath
+	chromePath = configs.GetConfig().ChromePath
+	if chromeDriverPath == "" || chromePath == "" {
+		return nil, fmt.Errorf("ChromeDriverPath or ChromePath is empty")
+	}
 	// 初始化Chrome驱动
 	service, err := selenium.NewChromeDriverService(chromeDriverPath, 4444)
 	if err != nil {
@@ -61,7 +73,7 @@ func NewSpider() (*Spider, error) {
 			"--disable-notifications",
 			"--disable-popup-blocking",
 			"--disable-dev-shm-usage",
-			//"--headless",
+			"--headless",
 		},
 		Prefs: map[string]interface{}{
 			"profile.default_content_setting_values.popups":        2,
@@ -96,13 +108,13 @@ func (s *Spider) Start(startUrl string, baseDomain string) error {
 	s.baseDomain = baseDomain
 	s.addurlQueue(startUrl)
 	s.urlQueue <- startUrl
-	err2 := s.driver.Get(startUrl)
-	if err2 != nil {
+	err := s.driver.Get(startUrl)
+	if err != nil {
 		fmt.Println("Start Error Get URL:", startUrl)
-		return err2
+		return err
 	}
 	// 设置Cookie
-	err := s.setCookies()
+	err = s.setCookies()
 	if err != nil {
 		return err
 	}
@@ -128,13 +140,9 @@ func (s *Spider) Stop() {
 
 // setCookies 设置cookie
 func (s *Spider) setCookies() error {
-	cookies := []selenium.Cookie{
-		{Name: "token", Value: ""},
-		{Name: "JSESSIONID", Value: ""},
-	}
-
-	for _, cookie := range cookies {
-		if err := s.driver.AddCookie(&cookie); err != nil {
+	cookies := configs.GetConfig().Cookie
+	for k, v := range cookies {
+		if err := s.driver.AddCookie(&selenium.Cookie{Name: k, Value: v}); err != nil {
 			return err
 		}
 	}
@@ -535,4 +543,52 @@ func (s *Spider) isUnicquElement(elem selenium.WebElement) bool {
 		return false
 	}
 
+}
+
+// GetParamRequests 生成去重后的spider结果
+func (s *Spider) GetParamRequests() []RequestInfo {
+	var paramRequests []RequestInfo
+	for _, requestInfo := range s.Results {
+		if len(requestInfo.Params) > 0 {
+			paramRequests = append(paramRequests, requestInfo)
+		}
+	}
+	uniqueRequests := make(map[string]RequestInfo)
+	// 请求去重处理
+	for _, req := range paramRequests {
+		// 生成唯一标识键
+		key := fmt.Sprintf("%s|%s|%s",
+			req.URL,
+			req.Method,
+			generateParamsHash(req.Params))
+
+		// 保留唯一请求
+		if _, exists := uniqueRequests[key]; !exists {
+			uniqueRequests[key] = req
+		}
+	}
+
+	// 转换map回切片
+	var result []RequestInfo
+	for _, req := range uniqueRequests {
+		result = append(result, req)
+	}
+
+	return result
+}
+
+// 生成参数哈希值（参数顺序不敏感）
+func generateParamsHash(params map[string][]string) string {
+	// 获取排序后的参数键
+	keys := make([]string, 0, len(params))
+	for k := range params {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, "|")
+}
+
+// GetParams Get 用于实现RequestInfoInterface接口
+func (r *RequestInfo) GetParams() map[string][]string {
+	return r.Params
 }

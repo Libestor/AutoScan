@@ -1,6 +1,7 @@
 package poc
 
 import (
+	"AutoScan/pkg/configs"
 	"fmt"
 	"gopkg.in/yaml.v3"
 	"os"
@@ -9,7 +10,7 @@ import (
 	"sync"
 )
 
-const (
+var (
 	MaxReadFileGoroutine = 100
 	MaxPocGoroutine      = 100
 )
@@ -18,7 +19,9 @@ type Template struct {
 	ID       string    `yaml:"id"`
 	Info     Info      `yaml:"info"`
 	Requests []Request `yaml:"requests" yaml:"http"`
-	Vail     bool
+	FileVail bool
+	PocVail  bool
+	VulUrl   string
 }
 
 type Info struct {
@@ -54,6 +57,10 @@ type ValidationError struct {
 func (e ValidationError) Error() string {
 	return fmt.Sprintf("validation error: field %s %s", e.Field, e.Message)
 }
+func InitConfig() {
+	MaxReadFileGoroutine = configs.GetConfig().PocConfig.MaxReadFileGoroutine
+	MaxPocGoroutine = configs.GetConfig().PocConfig.MaxPocGoroutine
+}
 
 // LoadAndValidateTemplate 解析单个Poc并验证
 func LoadAndValidateTemplate(path string) (*Template, []error) {
@@ -77,12 +84,12 @@ func (t *Template) PocFileValidate() []error {
 	// ID
 	if t.ID == "" {
 		errors = append(errors, ValidationError{Field: "id", Message: "不能为空"})
-		t.Vail = false
+		t.FileVail = false
 	}
 	// info
 	if t.Info.Name == "" {
 		errors = append(errors, ValidationError{Field: "info.name", Message: "不能为空"})
-		t.Vail = false
+		t.FileVail = false
 	}
 	// 严重性
 	validSeverities := map[string]bool{"critical": true, "high": true, "medium": true, "low": true, "info": true}
@@ -91,7 +98,7 @@ func (t *Template) PocFileValidate() []error {
 			Field:   "info.severity",
 			Message: fmt.Sprintf("无效值 '%s'，应为 critical/high/medium/low/info", t.Info.Severity),
 		})
-		t.Vail = false
+		t.FileVail = false
 	}
 	for i, req := range t.Requests {
 		prefix := fmt.Sprintf("requests[%d]", i)
@@ -102,7 +109,7 @@ func (t *Template) PocFileValidate() []error {
 				Field:   prefix + ".method",
 				Message: fmt.Sprintf("无效方法 '%s'", req.Method),
 			})
-			t.Vail = false
+			t.FileVail = false
 		}
 
 		// 路径变量
@@ -112,7 +119,7 @@ func (t *Template) PocFileValidate() []error {
 					Field:   prefix + ".path",
 					Message: "路径不能为空",
 				})
-				t.Vail = false
+				t.FileVail = false
 			}
 		}
 		// 匹配器
@@ -125,7 +132,7 @@ func (t *Template) PocFileValidate() []error {
 						Field:   matcherPrefix + ".words",
 						Message: "word类型必须包含匹配词",
 					})
-					t.Vail = false
+					t.FileVail = false
 				}
 			case "status":
 				for _, status := range matcher.Status {
@@ -134,7 +141,7 @@ func (t *Template) PocFileValidate() []error {
 							Field:   matcherPrefix + ".status",
 							Message: fmt.Sprintf("无效HTTP状态码 %d", status),
 						})
-						t.Vail = false
+						t.FileVail = false
 					}
 				}
 			case "regex":
@@ -143,14 +150,14 @@ func (t *Template) PocFileValidate() []error {
 						Field:   matcherPrefix + ".condition",
 						Message: "regex类型必须包含条件",
 					})
-					t.Vail = false
+					t.FileVail = false
 				}
 			default:
 				errors = append(errors, ValidationError{
 					Field:   matcherPrefix + ".type",
 					Message: fmt.Sprintf("未知匹配类型 '%s'", matcher.Type),
 				})
-				t.Vail = false
+				t.FileVail = false
 			}
 			if matcher.Condition == "" {
 				matcher.Condition = "and"
@@ -166,7 +173,7 @@ func (t *Template) PocFileValidate() []error {
 			req.MatchersCondition = "and"
 		}
 	}
-	t.Vail = true
+	t.FileVail = true
 	return errors
 }
 

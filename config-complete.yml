@@ -1,0 +1,31 @@
+# 必须 chromedriver 位置
+chrome_driver_path: /path/to/chromedriver
+# 必须 chrome 位置
+chrome_path: /path/to/chrome
+
+# 爬虫和通用模块检测中的cookie
+cookie:
+  key1: value1
+  key2: value2
+
+vulConfig:
+  sqliConfig:
+    # 时间盲注计算请求平均耗时需要的请求数量，这个数越大，波动越小，耗时越长
+    time_request_times: 30
+    max_goroutines: 10
+    # 相似度，通过，两个网站页面相似度大于这个值，认为这两个网站前后没有发送变化，一般不小于0.9999
+    similarity: 0.99999
+    # sqli注入的payload文件存放位置
+    payload_file: configs/sqli.xml
+  xssConfig:
+    max_goroutines: 10
+    # xss注入的payload文件存放位置
+    payload_file: configs/xss.xml
+
+pocConfig:
+  # 读取poc文件的最大线程数
+  max_read_file_goroutine: 100
+  # 执行poc的最大线程数
+  max_poc_goroutine: 100
+# 参数值默认为1
+default_param_value: 1

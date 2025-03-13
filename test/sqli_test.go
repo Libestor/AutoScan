@@ -1,6 +1,7 @@
 package test
 
 import (
+	"AutoScan/pkg/configs"
 	Spider "AutoScan/pkg/spider"
 	"AutoScan/pkg/vul/sqli"
 	"encoding/json"
@@ -26,6 +27,11 @@ func TestRunSqlScan(t *testing.T) {
 }
 
 func TestGetRequest(t *testing.T) {
+	i := configs.InitConfig("../config.yml")
+	configs.GetConfig()
+	if i != nil {
+		return
+	}
 	client := resty.New()
 	resp, err := client.R().SetQueryParams(map[string]string{
 		"id": "1",

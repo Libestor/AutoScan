@@ -15,13 +15,14 @@ import (
 )
 
 // UseAllPoc 调用所有poc进行验证
-func UseAllPoc(targetUrl string, dir_path string) {
+func UseAllPoc(targetUrl string, dirPath string) []*Template {
 	var (
 		wg        sync.WaitGroup
 		semaphore = make(chan struct{}, MaxPocGoroutine)
 	)
+	InitConfig()
 	// 加载POC
-	template, errors := LoadYamlPoc(dir_path)
+	template, errors := LoadYamlPoc(dirPath)
 	if len(errors) > 0 {
 		fmt.Println("加载和验证POC文件时出错:")
 		for _, err := range errors {
@@ -32,12 +33,12 @@ func UseAllPoc(targetUrl string, dir_path string) {
 	parseUrl, err := ParseURL(targetUrl)
 	if err != nil {
 		fmt.Printf("URL:%s 解析失败: %s，请重新输入", targetUrl, err)
-		return
+		return nil
 	}
 	placeholders := BuildPlaceHolders(parseUrl)
 	// 遍历POC并验证
 	for _, poc := range *template {
-		if poc.Vail == false {
+		if poc.FileVail == false {
 			continue
 		}
 		wg.Add(1)
@@ -57,9 +58,17 @@ func UseAllPoc(targetUrl string, dir_path string) {
 	}
 	wg.Wait()
 	close(semaphore)
+	var result []*Template
+	for _, poc := range *template {
+		if poc.PocVail {
+			result = append(result, poc)
+		}
+	}
 	fmt.Println("所有POC验证完成")
+	return result
 }
-func UseOnePoc(targetUrl string, pocPath string) {
+func UseOnePoc(targetUrl string, pocPath string) []*Template {
+	InitConfig()
 	// 加载POC
 	template, errors := LoadAndValidateTemplate(pocPath)
 	if len(errors) > 0 {
@@ -72,12 +81,17 @@ func UseOnePoc(targetUrl string, pocPath string) {
 	parseUrl, err := ParseURL(targetUrl)
 	if err != nil {
 		fmt.Printf("URL:%s 解析失败: %s，请重新输入", targetUrl, err)
-		return
+		return nil
 	}
 	placeholders := BuildPlaceHolders(parseUrl)
 	// POC并验证
 	template.PocValidate(placeholders)
-	fmt.Printf("%s POC验证完成", pocPath)
+	//fmt.Printf("%s POC验证完成", pocPath)
+	if template.PocVail {
+		return []*Template{template}
+	}
+	return nil
+
 }
 
 // PocValidate 验证单个Poc的核心函数
@@ -163,6 +177,7 @@ func (t *Template) PocValidate(ph map[string]string) {
 		// 交并运算
 		if CalcAndOr(matchResult, request.MatchersCondition) {
 			t.Print(ph)
+			t.PocVail = true
 		}
 	}
 }
@@ -203,6 +218,7 @@ func (t *Template) Print(ph map[string]string) {
 	}
 	Name := color.BlueString("%s", t.Info.Name)
 	fmt.Printf("[%s] [%s] [%s] [%s]\n", id, severity, Name, Render(t.Requests[0].Path[0], ph))
+	t.VulUrl = Render(t.Requests[0].Path[0], ph)
 }
 
 func BuildPlaceHolders(u *url.URL) map[string]string {

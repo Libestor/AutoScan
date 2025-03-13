@@ -1,2 +1,6 @@
 .idea
 .vscode
+.config.yml
+AutoScan.exe
+main.exe
+spider.json

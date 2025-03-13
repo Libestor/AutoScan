@@ -1,16 +1,24 @@
 package utils
 
 import (
-	Spider "AutoScan/pkg/spider"
+	"errors"
+	"fmt"
+	"github.com/fatih/color"
 	"github.com/go-resty/resty/v2"
 	"math/rand"
+	"os"
 	"sync"
 	"time"
 )
 
+// RequestInfoInterface 取消循环导入所引入的接口
+type RequestInfoInterface interface {
+	GetParams() map[string][]string
+}
+
 const (
-	DefaultParam = "1"
-	CHAARSET     = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	DefaultParamValue = "1"
+	CHAARSET          = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 )
 
 var Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -31,14 +39,15 @@ func (c *Client) InitClient() {
 }
 
 // GetParams 获取请求
-func GetParams(info Spider.RequestInfo) map[string]string {
+func GetParams(info RequestInfoInterface) map[string]string {
+	Params := info.GetParams()
 	params := make(map[string]string)
 	//params := make(sync.Map)
-	for param := range info.Params {
-		if len(info.Params[param]) == 0 || info.Params[param][0] == "" {
-			params[param] = DefaultParam
+	for param := range Params {
+		if len(Params[param]) == 0 || Params[param][0] == "" {
+			params[param] = DefaultParamValue
 		}
-		params[param] = info.Params[param][0]
+		params[param] = Params[param][0]
 	}
 	// 适配pikachu
 	params["submit"] = "submit"
@@ -83,4 +92,21 @@ func GetRandString() string {
 		b[i] = CHAARSET[Rand.Intn(len(CHAARSET))]
 	}
 	return string(b)
+}
+
+// CheckFileDirExists 检测文件或文件夹是否存在
+func CheckFileDirExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		fmt.Printf("[%s] [%s] 文件或目录不存在，请重试\n", color.RedString("Error"), path)
+		return false // 文件或目录不存在
+	}
+	if err != nil {
+		fmt.Printf("[%s] [%s] 打开文件或目录出现错误，%v\n", color.RedString("Error"), path, err)
+		return false
+	}
+	return true
 }

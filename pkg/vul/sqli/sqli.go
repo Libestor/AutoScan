@@ -1,66 +1,45 @@
 package sqli
 
 import (
+	"AutoScan/pkg/configs"
 	"AutoScan/pkg/spider"
 	"AutoScan/pkg/utils"
+	"encoding/xml"
 	"fmt"
 	"github.com/agnivade/levenshtein"
 	"github.com/go-resty/resty/v2"
 	"github.com/jinzhu/copier"
 	"gonum.org/v1/gonum/stat"
 	"math"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
 	"sync"
 )
 
-// ERRORDIR 触发SQL错误的字符
-var ERRORDIR = []string{
-	"'",
-	"\"",
-	"\\",
-	"%BF",
-}
-
-const (
+var (
 	SIMILARITY       = 0.99999
-	DefaultParam     = "1"
 	TimeRequestTimes = 30
 	MaxGoroutines    = 10
+	DefaultParam     = "1"
 )
 
-// BOOLNUMDIR BOOL数字盲注
-var BOOLNUMDIR = map[string]string{
-	"true1":  " OR 2025=2025 LIMIT 1 -- ",
-	"true2":  " OR 2021=2021 LIMIT 1 -- ",
-	"false1": " AND 2021=2025",
-	"false2": " AND 21=25",
-}
-
-// BOOLCHAR BOOL字符盲注
-var BOOLCHAR = map[string]string{
-	"true1":  "' OR 2025=2025 LIMIT 1 -- ",
-	"true2":  "' OR 2021=2021 LIMIT 1 -- ",
-	"false1": "' AND 2021=2025 LIMIT 1 -- ",
-	"false2": "' AND 21=25 LIMIT 1 -- ",
-}
-
-// TIMEDIR TIME盲注
-var TIMEDIR = map[string]string{
-	"true1": "' AND (SELECT 2025 FROM (SELECT(SLEEP(5)))CQUPT) AND 'CQUPT'='CQUPT",
-	"true2": "' AND (SELECT 2021 FROM (SELECT(SLEEP(4)))CQUPT) AND 'cqupt'='cqupt",
-	"false": "' AND (SELECT 2025 FROM (SELECT(SLEEP(0)))CQUPT) AND 'CQUPT'='CQUPT",
-}
+var (
+	BOOLNUMDIR map[string]string
+	BOOLCHAR   map[string]string
+	TIMEDIR    map[string]string
+	ERRORDIR   []string
+)
 
 // 检测SQL错误的正则表达式
 var regexPatterns = []*regexp.Regexp{
 	// 5. SQL 语法错误
 	regexp.MustCompile(`(?i)([^\n>]{0,100}SQL Syntax[^\n<]+)`),
-
 	// 11. 查询错误
 	regexp.MustCompile(`(?i)(query error: )`),
 }
+var client = utils.Client{}
 
 type SqlResult struct {
 	URL         string
@@ -78,14 +57,68 @@ type TimeSqlInfo struct {
 	Deviation float64
 }
 
-var client = utils.Client{}
+// Config 定义XML结构体
+type Config struct {
+	XMLName    xml.Name `xml:"sqli"`
+	BOOLNUMDIR MapData  `xml:"BOOLNUMDIR"`
+	BOOLCHAR   MapData  `xml:"BOOLCHAR"`
+	TIMEDIR    MapData  `xml:"TIMEDIR"`
+	ERRORDIR   ListData `xml:"ERRORDIR"`
+}
+type Item struct {
+	Key   string `xml:"key,attr"`
+	Value string `xml:",chardata"`
+}
 
-func init() {
+type MapData struct {
+	Items []Item `xml:"item"`
+}
+type ListData struct {
+	Items []string `xml:"item"`
+}
+
+func InitConfig() {
+	SIMILARITY = configs.GetConfig().VulConfig.SqliConfig.Similarity
+	TimeRequestTimes = configs.GetConfig().VulConfig.SqliConfig.TimeRequestTimes
+	MaxGoroutines = configs.GetConfig().VulConfig.SqliConfig.MaxGoroutines
+	//初始化客户端
 	client.InitClient()
+	// 从XML初始化payload
+	xmlFile, err := os.ReadFile(configs.GetConfig().VulConfig.SqliConfig.PayloadFiles)
+	if err != nil {
+		fmt.Println("Error reading XML file:", err)
+		return
+	}
+
+	// 解析 XML 数据
+	var config Config
+	err = xml.Unmarshal(xmlFile, &config)
+	if err != nil {
+		fmt.Println("Error unmarshalling XML:", err)
+		return
+	}
+
+	// 将解析的数据加载到全局变量中
+	BOOLNUMDIR = make(map[string]string)
+	for _, item := range config.BOOLNUMDIR.Items {
+		BOOLNUMDIR[item.Key] = item.Value
+	}
+
+	BOOLCHAR = make(map[string]string)
+	for _, item := range config.BOOLCHAR.Items {
+		BOOLCHAR[item.Key] = item.Value
+	}
+
+	TIMEDIR = make(map[string]string)
+	for _, item := range config.TIMEDIR.Items {
+		TIMEDIR[item.Key] = item.Value
+	}
+	ERRORDIR = config.ERRORDIR.Items
 }
 
 // RunSqlScan 启动SQL注入扫描
 func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
+	InitConfig()
 	var data []*SqlResult
 	wg := sync.WaitGroup{}
 	// 用信号量来控制并发数量
@@ -101,8 +134,9 @@ func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
 			Params:      info.Params,
 			RequestType: info.RequestType,
 		}
+		wg.Add(1)
 		go func(spiderInfo Spider.RequestInfo) {
-			wg.Add(1)
+
 			defer wg.Done()
 			result.TestSqli(spiderInfo)
 			<-sem
@@ -110,7 +144,7 @@ func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
 		data = append(data, result)
 	}
 	wg.Wait()
-	fmt.Println("sql注入测试完毕")
+	//fmt.Println("sql注入测试完毕")
 	var results []SqlResult
 	for _, i := range data {
 		results = append(results, *i)
@@ -149,7 +183,7 @@ func ErrorSqli(info Spider.RequestInfo) (bool, string) {
 	for i := range info.Params {
 		for _, j := range ERRORDIR {
 			// 发送请求
-			copyMap := utils.GetParams(info)
+			copyMap := utils.GetParams(&info)
 			copyMap[i] = copyMap[i] + j
 			resp, err := client.Request(info.URL, info.Method, copyMap, info.RequestType)
 			if err != nil {
@@ -199,7 +233,7 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 	if str {
 		payload = BOOLCHAR
 	}
-	newParams := utils.GetParams(info)
+	newParams := utils.GetParams(&info)
 	true1 := make(map[string]string)
 	true2 := make(map[string]string)
 	false1 := make(map[string]string)
@@ -346,7 +380,7 @@ func CheckBool(resp1 *resty.Response, resp2 *resty.Response) bool {
 
 // OnceTimeSqli 时间盲注的核心函数
 func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool {
-	params := utils.GetParams(info)
+	params := utils.GetParams(&info)
 	true1 := make(map[string]string)
 	true2 := make(map[string]string)
 	false1 := make(map[string]string)
@@ -394,7 +428,7 @@ func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool 
 
 // CalcTime 计算该网站的平均相应时间和标准差
 func (t *TimeSqlInfo) CalcTime(info Spider.RequestInfo) {
-	params := utils.GetParams(info)
+	params := utils.GetParams(&info)
 	data := []float64{}
 	resultChan := make(chan float64, TimeRequestTimes+2)
 	// 使用semaphore限制并发数
