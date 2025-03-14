@@ -5,10 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
-	"github.com/fatih/color"
 	"log"
 	URL "net/url"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -34,28 +35,56 @@ type Spider struct {
 	elemSha256 map[string]bool
 	baseDomain string
 }
+type Config struct {
+	XMLName     xml.Name `xml:"spider"`
+	BrowserArgs ListData `xml:"BROWSER_ARGS"`
+}
+
+type ListData struct {
+	Items []string `xml:"item"`
+}
+type Item struct {
+	Key   string `xml:"key,attr"`
+	Value string `xml:",chardata"`
+}
 
 var (
 	chromeDriverPath = ""
 	chromePath       = ""
+	BROWSER_ARGS     []string
 )
 
 // NewSpider 初始化爬虫
 func NewSpider() (*Spider, error) {
 	if !configs.CheckChrome() {
-		fmt.Printf("[%s] Chrome 模块初始化失败，Spider模块退出\n", color.RedString("ERROR"))
-		return nil, fmt.Errorf("Chrome 模块初始化失败")
+		return nil, fmt.Errorf("chrome 模块初始化失败，Spider模块退出")
 	}
 	// 初始化变量
 	chromeDriverPath = configs.GetConfig().ChromeDriverPath
 	chromePath = configs.GetConfig().ChromePath
 	if chromeDriverPath == "" || chromePath == "" {
-		return nil, fmt.Errorf("ChromeDriverPath or ChromePath is empty")
+		return nil, fmt.Errorf("ChromeDriverPath 或 ChromePath 为空")
 	}
+	// 读取配置文件
+	xmlFile, err := os.ReadFile(configs.GetConfig().SpiderConfigFile)
+	if err != nil {
+		fmt.Println("Error reading XML file:", err)
+		return nil, err
+	}
+
+	// 解析 XML 数据
+	var config Config
+	err = xml.Unmarshal(xmlFile, &config)
+	if err != nil {
+		fmt.Println("Error unmarshalling XML:", err)
+		return nil, err
+	}
+	BROWSER_ARGS = config.BrowserArgs.Items
+
 	// 初始化Chrome驱动
 	service, err := selenium.NewChromeDriverService(chromeDriverPath, 4444)
 	if err != nil {
-		log.Fatal("Error starting driver:", err)
+		return nil, err
 	}
 	//defer service.Stop()
 
@@ -69,12 +98,7 @@ func NewSpider() (*Spider, error) {
 	// Chrome选项配置
 	chromeCaps := chrome.Capabilities{
 		Path: chromePath,
-		Args: []string{
-			"--disable-notifications",
-			"--disable-popup-blocking",
-			"--disable-dev-shm-usage",
-			"--headless",
-		},
+		Args: BROWSER_ARGS,
 		Prefs: map[string]interface{}{
 			"profile.default_content_setting_values.popups":        2,
 			"profile.default_content_setting_values.notifications": 2,

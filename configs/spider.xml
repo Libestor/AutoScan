@@ -1,0 +1,8 @@
+<spider>
+    <BROWSER_ARGS>
+        <item>--disable-notifications</item>
+        <item>--disable-popup-blocking</item>
+        <item>--disable-dev-shm-usage</item>
+        <item>--headless</item>
+    </BROWSER_ARGS>
+</spider>
