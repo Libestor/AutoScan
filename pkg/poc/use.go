@@ -24,15 +24,16 @@ func UseAllPoc(targetUrl string, dirPath string) []*Template {
 	// 加载POC
 	template, errors := LoadYamlPoc(dirPath)
 	if len(errors) > 0 {
-		fmt.Println("加载和验证POC文件时出错:")
+		fmt.Printf("[%s] 加载和验证POC文件时存在错误：", color.YellowString("ERROR"))
 		for _, err := range errors {
 			fmt.Println(err)
 		}
 	}
+	fmt.Printf("[%s] 本次共加载Poc %d个\n", color.BlueString("INF"), len(*template))
 	// 解析URL
 	parseUrl, err := ParseURL(targetUrl)
 	if err != nil {
-		fmt.Printf("URL:%s 解析失败: %s，请重新输入", targetUrl, err)
+		fmt.Printf("[%s] URL: %s 解析失败: %s，请重新输入", color.RedString("ERROR"), targetUrl, err)
 		return nil
 	}
 	placeholders := BuildPlaceHolders(parseUrl)
@@ -50,7 +51,7 @@ func UseAllPoc(targetUrl string, dirPath string) []*Template {
 			var ph map[string]string
 			err2 := copier.Copy(&ph, placeholders)
 			if err2 != nil {
-				fmt.Println("复制占位符失败:", err2)
+				fmt.Printf("[%s] 复制占位符失败: %s", color.RedString("ERROR"), err2)
 				return
 			}
 			poc.PocValidate(ph)
@@ -64,7 +65,7 @@ func UseAllPoc(targetUrl string, dirPath string) []*Template {
 			result = append(result, poc)
 		}
 	}
-	fmt.Println("所有POC验证完成")
+	fmt.Printf("[%s] 所有POC验证完成", color.BlueString("INF"))
 	return result
 }
 func UseOnePoc(targetUrl string, pocPath string) []*Template {
@@ -72,7 +73,7 @@ func UseOnePoc(targetUrl string, pocPath string) []*Template {
 	// 加载POC
 	template, errors := LoadAndValidateTemplate(pocPath)
 	if len(errors) > 0 {
-		fmt.Println("加载和验证POC文件时出错:")
+		fmt.Printf("[%s] 加载和验证POC文件时存在错误：", color.YellowString("ERROR"))
 		for _, err := range errors {
 			fmt.Println(err)
 		}
@@ -80,7 +81,7 @@ func UseOnePoc(targetUrl string, pocPath string) []*Template {
 	// 解析URL
 	parseUrl, err := ParseURL(targetUrl)
 	if err != nil {
-		fmt.Printf("URL:%s 解析失败: %s，请重新输入", targetUrl, err)
+		fmt.Printf("[%s] URL:%s 解析失败: %s，请重新输入", color.RedString("ERROR"), targetUrl, err)
 		return nil
 	}
 	placeholders := BuildPlaceHolders(parseUrl)
@@ -117,7 +118,7 @@ func (t *Template) PocValidate(ph map[string]string) {
 			for _, path := range request.Path {
 				post, err := req.Post(Render(path, ph))
 				if err != nil {
-					fmt.Println("请求", Render(path, ph), "出现错误:", err)
+					fmt.Printf("[%s] 请求 %s 出现错误: %s", color.RedString("ERROR"), Render(path, ph), err)
 					continue
 				}
 				resqs = append(resqs, post)
@@ -137,7 +138,7 @@ func (t *Template) PocValidate(ph map[string]string) {
 					oneReps, err = req.Put(RendPath)
 				}
 				if err != nil {
-					fmt.Println("请求", Render(path, ph), "出现错误:", err)
+					fmt.Printf("[%s] 请求 %s 出现错误: %s", color.RedString("ERROR"), Render(path, ph), err)
 					continue
 				}
 				resqs = append(resqs, oneReps)
@@ -261,7 +262,7 @@ func Render(template string, placeholders map[string]string) string {
 func ParseURL(rawURL string) (*url.URL, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("URL解析失败: %v", err)
+		return nil, err
 	}
 	return u, nil
 }

@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"log"
+	"github.com/fatih/color"
 	URL "net/url"
 	"os"
 	"sort"
@@ -38,6 +38,7 @@ type Spider struct {
 type Config struct {
 	XMLName     xml.Name `xml:"spider"`
 	BrowserArgs ListData `xml:"BROWSER_ARGS"`
+	Selector    ListData `xml:"SELECTOR"`
 }
 
 type ListData struct {
@@ -51,7 +52,9 @@ type Item struct {
 var (
 	chromeDriverPath = ""
 	chromePath       = ""
-	BROWSER_ARGS     []string
+	BrowserArgs      []string
+	SELECTOR         []string
+	SpiderFillString = "spider_test_data"
 )
 
 // NewSpider 初始化爬虫
@@ -62,25 +65,24 @@ func NewSpider() (*Spider, error) {
 	// 初始化变量
 	chromeDriverPath = configs.GetConfig().ChromeDriverPath
 	chromePath = configs.GetConfig().ChromePath
+	SpiderFillString = configs.GetConfig().SpiderConfig.SpiderFillString
 	if chromeDriverPath == "" || chromePath == "" {
 		return nil, fmt.Errorf("ChromeDriverPath 或 ChromePath 为空")
 	}
 	// 读取配置文件
 	xmlFile, err := os.ReadFile(configs.GetConfig().SpiderConfigFile)
 	if err != nil {
-		fmt.Println("Error reading XML file:", err)
-		return nil, err
+		return nil, fmt.Errorf("xml文件读取失败：%s", err)
 	}
 
 	// 解析 XML 数据
 	var config Config
 	err = xml.Unmarshal(xmlFile, &config)
 	if err != nil {
-		fmt.Println("Error unmarshalling XML:", err)
-		return nil, err
+		return nil, fmt.Errorf("xml文件解析失败：%s", err)
 	}
-	BROWSER_ARGS = config.BrowserArgs.Items
-
+	BrowserArgs = config.BrowserArgs.Items
+	SELECTOR = config.Selector.Items
 	// 初始化Chrome驱动
 	service, err := selenium.NewChromeDriverService(chromeDriverPath, 4444)
 	if err != nil {
@@ -98,7 +100,7 @@ func NewSpider() (*Spider, error) {
 	// Chrome选项配置
 	chromeCaps := chrome.Capabilities{
 		Path: chromePath,
-		Args: BROWSER_ARGS,
+		Args: BrowserArgs,
 		Prefs: map[string]interface{}{
 			"profile.default_content_setting_values.popups":        2,
 			"profile.default_content_setting_values.notifications": 2,
@@ -112,7 +114,7 @@ func NewSpider() (*Spider, error) {
 
 	driver, err := selenium.NewRemote(caps, "")
 	if err != nil {
-		log.Fatal("Error creating web driver:", err)
+		return nil, fmt.Errorf("创建driver失败：%s", err)
 	}
 
 	// 初始化爬虫
@@ -134,13 +136,12 @@ func (s *Spider) Start(startUrl string, baseDomain string) error {
 	s.urlQueue <- startUrl
 	err := s.driver.Get(startUrl)
 	if err != nil {
-		fmt.Println("Start Error Get URL:", startUrl)
-		return err
+		return fmt.Errorf("尝试访问目标URL失败：%s", err)
 	}
 	// 设置Cookie
 	err = s.setCookies()
 	if err != nil {
-		return err
+		return fmt.Errorf("设置cookie失败：%s", err)
 	}
 	// 关闭弹窗
 	s.disablePrompt()
@@ -154,11 +155,11 @@ func (s *Spider) Stop() {
 	close(s.urlQueue)
 	err := s.driver.Quit()
 	if err != nil {
-		fmt.Println("Stop Error Quit driver:", err)
+		fmt.Printf("[%s] 关闭浏览器失败：%s\n", color.RedString("Error"), err)
 	}
 	err = s.service.Stop()
 	if err != nil {
-		fmt.Println("Stop Error Stop service:", err)
+		fmt.Printf("[%s] 关闭浏览器服务失败：%s\n", color.RedString("Error"), err)
 	}
 }
 
@@ -178,15 +179,15 @@ func (s *Spider) disablePrompt() {
 	// 关闭弹窗
 	_, err := s.driver.ExecuteScript("window.alert = function() {};", nil)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("[%s] %s", color.RedString("ERROR"), err)
 	}
 	_, err = s.driver.ExecuteScript("window.confirm = function() { return true; };", nil)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("[%s] %s", color.RedString("ERROR"), err)
 	}
 	_, err = s.driver.ExecuteScript("window.prompt = function() { return ''; };", nil)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("[%s] %s", color.RedString("ERROR"), err)
 	}
 
 }
@@ -215,9 +216,9 @@ func (s *Spider) spiderPage(url string) {
 		return
 	}
 
-	fmt.Printf("[+]当前页面为：%s\n", url)
+	fmt.Printf("[%s] [+]当前页面为：%s\n", color.BlueString("INF"), url)
 	if err := s.driver.Get(url); err != nil {
-		fmt.Printf("Error loading page: %v", err)
+		fmt.Printf("[%s] [-] 载入页面失败：%v\n", color.BlueString("INF"), err)
 		return
 	}
 
@@ -239,7 +240,7 @@ func (s *Spider) spiderPage(url string) {
 func (s *Spider) processNetworkRequests() {
 	logs, err := s.driver.Log("performance")
 	if err != nil {
-		fmt.Printf("Error getting logs: %v", err)
+		fmt.Printf("[%s] [-] 无法获取网络日志：%v\n", color.RedString("ERROR"), err)
 		return
 	}
 
@@ -299,7 +300,7 @@ func (s *Spider) processForms() {
 	s.disablePrompt()
 	forms, err := s.driver.FindElements(selenium.ByTagName, "form")
 	if err != nil {
-		fmt.Printf("processForms Error finding forms: %v\n", err)
+		fmt.Printf("[%s] [-] 无法获取表单信息：%v\n", color.RedString("ERROR"), err)
 		return
 	}
 
@@ -313,27 +314,27 @@ func (s *Spider) processForms() {
 			case "input":
 				switch inputType {
 				case "text", "email", "search", "password":
-					err = input.SendKeys("spider_test_data")
+					err = input.SendKeys(SpiderFillString)
 					if err != nil {
-						fmt.Printf("processForms Error sending keys to input: %v\n", err)
+						fmt.Printf("[%s] [-] 无法发送数据到输入框：%v\n", color.RedString("ERROR"), err)
 					}
 				case "checkbox", "radio":
 					err = input.Click()
 					if err != nil {
-						fmt.Printf("processForms Error clicking input: %v\n", err)
+						fmt.Printf("[%s] [-] 无法点击复选框或单选框：%v\n", color.RedString("ERROR"), err)
 					}
 				}
 			case "textarea":
-				err = input.SendKeys("spider_test_content")
+				err = input.SendKeys(SpiderFillString)
 				if err != nil {
-					fmt.Printf("processForms Error sending keys to textarea: %v\n", err)
+					fmt.Printf("[%s] [-] 无法发送数据到文本框：%v\n", color.RedString("ERROR"), err)
 				}
 			case "select":
 				options, _ := input.FindElements(selenium.ByTagName, "option")
 				if len(options) > 0 {
 					err = options[0].Click()
 					if err != nil {
-						fmt.Printf("processForms Error clicking select option: %v\n", err)
+						fmt.Printf("[%s] [-] 无法选择下拉框选项：%v\n", color.RedString("ERROR"), err)
 					}
 				}
 			}
@@ -344,7 +345,7 @@ func (s *Spider) processForms() {
 			time.Sleep(100 * time.Millisecond)
 			err = s.driver.Back()
 			if err != nil {
-				fmt.Printf("processForms Error navigating back: %v\n", err)
+				fmt.Printf("[%s] [-] 无法返回上一页：%v\n", color.RedString("ERROR"), err)
 			}
 		}
 	}
@@ -365,40 +366,37 @@ func isStaleError(err error) bool {
 	return strings.Contains(err.Error(), "stale element reference")
 }
 
-// 带超时的元素等待函数
-func (s *Spider) waitForElements(selector string, timeout time.Duration) ([]selenium.WebElement, error) {
-	endTime := time.Now().Add(timeout)
-	for time.Now().Before(endTime) {
-		els, err := s.driver.FindElements(selenium.ByCSSSelector, selector)
-		if err == nil && len(els) > 0 {
-			return els, nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return nil, fmt.Errorf("元素查找超时")
-}
+//// 带超时的元素等待函数
+//func (s *Spider) waitForElements(selector string, timeout time.Duration) ([]selenium.WebElement, error) {
+//	endTime := time.Now().Add(timeout)
+//	for time.Now().Before(endTime) {
+//		els, err := s.driver.FindElements(selenium.ByCSSSelector, selector)
+//		if err == nil && len(els) > 0 {
+//			return els, nil
+//		}
+//		time.Sleep(100 * time.Millisecond)
+//	}
+//	return nil, fmt.Errorf("元素查找超时")
+//}
 
 // 模拟用户点击
 func (s *Spider) handleInteractiveElements() {
-	selectors := []string{
-		"a", "button", "[role='button']", "[onclick]",
-		"[data-toggle]", ".btn", "[href^='javascript']", "[data-target]",
-	}
+	selectors := SELECTOR
 
 	for _, selector := range selectors {
 		elements, err := s.driver.FindElements(selenium.ByCSSSelector, selector)
 		if err != nil {
-			fmt.Printf("handleInteractiveElements Error finding elements: %v\n", err)
+			fmt.Printf("[%s] [-] 无法获取元素信息：%v\n", color.RedString("ERROR"), err)
 			continue
 		}
 
 		for index, elem := range elements {
-			current_elements, _ := s.driver.FindElements(selenium.ByCSSSelector, selector)
-			if index >= len(current_elements) {
+			currentElements, _ := s.driver.FindElements(selenium.ByCSSSelector, selector)
+			if index >= len(currentElements) {
 				continue
 			}
 			// 此处是为了防止页面刷新导致elem元素不对应，所以使用index保存elem
-			elem = current_elements[index]
+			elem = currentElements[index]
 			if isVisible, _ := elem.IsDisplayed(); isVisible && !s.isUnicquElement(elem) {
 				initialURL, _ := s.driver.CurrentURL()
 				if err = s.clickWithJS(elem); err == nil {
@@ -408,7 +406,7 @@ func (s *Spider) handleInteractiveElements() {
 					if newURL != initialURL {
 						err = s.driver.Back()
 						if err != nil {
-							fmt.Printf("handleInteractiveElements Error navigating back: %v\n", err)
+							fmt.Printf("[%s] [-] 无法返回上一页：%v\n", color.RedString("ERROR"), err)
 						}
 					}
 				}
@@ -425,13 +423,13 @@ func (s *Spider) processPageContent() {
 	for _, frame := range frames {
 		err := s.driver.SwitchFrame(frame)
 		if err != nil {
-			fmt.Printf("Error switching to iframe: %v\n", err)
+			fmt.Printf("[%s] [-] 无法切换到iframe：%v\n", color.RedString("ERROR"), err)
 			continue
 		}
 		s.extractLinks(selenium.ByTagName, "a")
 		err = s.driver.SwitchFrame(nil)
 		if err != nil {
-			fmt.Printf("Error switching back to parent frame: %v\n", err)
+			fmt.Printf("[%s] [-] 无法切换回父级iframe：%v\n", color.RedString("ERROR"), err)
 		}
 	}
 }
@@ -515,9 +513,7 @@ func (s *Spider) deduplicate() {
 			uniqueResults = append(uniqueResults, item)
 		}
 	}
-
 	s.Results = uniqueResults
-
 }
 func ParseQuery(query string) (map[string][]string, string) {
 	var data map[string]interface{}
@@ -585,23 +581,20 @@ func (s *Spider) GetParamRequests() []RequestInfo {
 			req.URL,
 			req.Method,
 			generateParamsHash(req.Params))
-
 		// 保留唯一请求
 		if _, exists := uniqueRequests[key]; !exists {
 			uniqueRequests[key] = req
 		}
 	}
-
 	// 转换map回切片
 	var result []RequestInfo
 	for _, req := range uniqueRequests {
 		result = append(result, req)
 	}
-
 	return result
 }
 
-// 生成参数哈希值（参数顺序不敏感）
+// 生成参数哈希值
 func generateParamsHash(params map[string][]string) string {
 	// 获取排序后的参数键
 	keys := make([]string, 0, len(params))

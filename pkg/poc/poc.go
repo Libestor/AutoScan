@@ -3,6 +3,7 @@ package poc
 import (
 	"AutoScan/pkg/configs"
 	"fmt"
+	"github.com/fatih/color"
 	"gopkg.in/yaml.v3"
 	"os"
 	"path/filepath"
@@ -55,7 +56,7 @@ type ValidationError struct {
 }
 
 func (e ValidationError) Error() string {
-	return fmt.Sprintf("validation error: field %s %s", e.Field, e.Message)
+	return fmt.Sprintf("[%s] Poc文件验证失败： %s %s", color.RedString("ERROR"), e.Field, e.Message)
 }
 func InitConfig() {
 	MaxReadFileGoroutine = configs.GetConfig().PocConfig.MaxReadFileGoroutine
@@ -66,12 +67,12 @@ func InitConfig() {
 func LoadAndValidateTemplate(path string) (*Template, []error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, []error{fmt.Errorf("文件读取失败: %w", err)}
+		return nil, []error{fmt.Errorf("[%s] 文件读取失败: %w", color.RedString("ERROR"), err)}
 	}
 
 	var tpl Template
 	if err := yaml.Unmarshal(data, &tpl); err != nil {
-		return nil, []error{fmt.Errorf("YAML %s 解析失败: %w", path, err)}
+		return nil, []error{fmt.Errorf("[%s]  YAML %s 解析失败: %w", color.RedString("ERROR"), path, err)}
 	}
 
 	return &tpl, tpl.PocFileValidate()
@@ -230,7 +231,7 @@ func getYamlFiles(dir string) ([]string, error) {
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, fmt.Errorf("目录读取失败: %w", err)
+		return nil, fmt.Errorf("[%s] 目录读取失败: %w", color.RedString("ERROR"), err)
 	}
 
 	for _, entry := range entries {

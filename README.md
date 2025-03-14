@@ -22,7 +22,8 @@ poc扫描模式：
                  AutoScan -u http://127.0.0.1 -spider [-out-json ./spider.json]
 通用漏洞扫描模式：
                  AutoScan -u http://127.0.0.1 -vul sql -p username [-out-json ./spider.json]
-                 AutoScan  -vul sql -f ./spider.json [-out-json ./spider.json]
+spider的扫描结果可以直接导入到vul扫描中：
+                 AutoScan  -vul sql -f ./spider.json -vul xss,sql [-out-json ./spider.json]
 参数说明：
   -b value
         post请求的body参数，使用','分割，或者多次使用-b传入

@@ -7,6 +7,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/agnivade/levenshtein"
+	"github.com/fatih/color"
 	"github.com/go-resty/resty/v2"
 	"github.com/jinzhu/copier"
 	"gonum.org/v1/gonum/stat"
@@ -77,7 +78,7 @@ type ListData struct {
 	Items []string `xml:"item"`
 }
 
-func InitConfig() {
+func InitConfig() error {
 	SIMILARITY = configs.GetConfig().VulConfig.SqliConfig.Similarity
 	TimeRequestTimes = configs.GetConfig().VulConfig.SqliConfig.TimeRequestTimes
 	MaxGoroutines = configs.GetConfig().VulConfig.SqliConfig.MaxGoroutines
@@ -86,16 +87,14 @@ func InitConfig() {
 	// 从XML初始化payload
 	xmlFile, err := os.ReadFile(configs.GetConfig().VulConfig.SqliConfig.PayloadFiles)
 	if err != nil {
-		fmt.Println("Error reading XML file:", err)
-		return
+		return fmt.Errorf("xml文件读取失败 %s", err)
 	}
 
 	// 解析 XML 数据
 	var config Config
 	err = xml.Unmarshal(xmlFile, &config)
 	if err != nil {
-		fmt.Println("Error unmarshalling XML:", err)
-		return
+		return fmt.Errorf("xml文件解析失败 %s", err)
 	}
 
 	// 将解析的数据加载到全局变量中
@@ -114,11 +113,16 @@ func InitConfig() {
 		TIMEDIR[item.Key] = item.Value
 	}
 	ERRORDIR = config.ERRORDIR.Items
+	return nil
 }
 
 // RunSqlScan 启动SQL注入扫描
-func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
-	InitConfig()
+func RunSqlScan(rawData []Spider.RequestInfo) ([]SqlResult, error) {
+	err := InitConfig()
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("[%s] SQL注入扫描引擎初始化完成\n", color.GreenString("INF"))
 	var data []*SqlResult
 	wg := sync.WaitGroup{}
 	// 用信号量来控制并发数量
@@ -149,7 +153,7 @@ func RunSqlScan(rawData []Spider.RequestInfo) []SqlResult {
 	for _, i := range data {
 		results = append(results, *i)
 	}
-	return results
+	return results, nil
 }
 
 // TestSqli 单个请求验证的核心函数
@@ -187,7 +191,7 @@ func ErrorSqli(info Spider.RequestInfo) (bool, string) {
 			copyMap[i] = copyMap[i] + j
 			resp, err := client.Request(info.URL, info.Method, copyMap, info.RequestType)
 			if err != nil {
-				fmt.Println("ErrorSqli request Error:", err)
+				fmt.Printf("[%s] ErrorSqli 请求失败 %s\n", color.RedString("Error"), err)
 				return false, i
 			}
 			if CheckError(resp) {
@@ -243,7 +247,7 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 	err2 := copier.Copy(&false1, &newParams)
 	err3 := copier.Copy(&false2, &newParams)
 	if err != nil || err1 != nil || err2 != nil || err3 != nil {
-		fmt.Println("OnceBoolSqli copy error:", err, err1, err2, err3)
+		fmt.Printf("[%s] BoolSqli 复制字典失败 %s %s %s %s\n", color.RedString("Error"), err, err1, err2, err3)
 		return false
 	}
 	true1[target] = true1[target] + payload["true1"]
@@ -253,18 +257,18 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 	// 发送请求
 	originResp, err := client.Request(info.URL, info.Method, newParams, info.RequestType)
 	if err != nil {
-		fmt.Println("BoolSqli origin request Error:", err)
+		fmt.Printf("[%s] BoolSqli 原始请求失败 %s\n", color.RedString("Error"), err)
 		return false
 	}
 	False1Resp, err := client.Request(info.URL, info.Method, false1, info.RequestType)
 	if err != nil {
-		fmt.Println("BoolSqli false1 request Error:", err)
+		fmt.Printf("[%s] BoolSqli false1 请求失败 %s\n", color.RedString("Error"), err)
 		return false
 	}
 
 	True1resp, err := client.Request(info.URL, info.Method, true1, info.RequestType)
 	if err != nil {
-		fmt.Println("BoolSqli true1 request Error:", err)
+		fmt.Printf("[%s] BoolSqli true1 请求失败 %s\n", color.RedString("Error"), err)
 		return false
 	}
 
@@ -281,12 +285,12 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 		// 如果true1和tru2相同，则表示是漏洞，并且false1和false2也相同
 		True2resp, err := client.Request(info.URL, info.Method, true2, info.RequestType)
 		if err != nil {
-			fmt.Println("BoolSqli true2 request Error:", err)
+			fmt.Printf("[%s] BoolSqli true2 请求失败 %s\n", color.RedString("Error"), err)
 			return false
 		}
 		False2resp, err := client.Request(info.URL, info.Method, false2, info.RequestType)
 		if err != nil {
-			fmt.Println("BoolSqli false2 request Error:", err)
+			fmt.Printf("[%s] BoolSqli false2 请求失败 %s\n", color.RedString("Error"), err)
 			return false
 		}
 		if CheckBool(True2resp, True1resp) && CheckBool(False2resp, False1Resp) {
@@ -299,7 +303,7 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 		// 如果True2和原始页面相同，则表示是漏洞
 		True2resp, err := client.Request(info.URL, info.Method, true2, info.RequestType)
 		if err != nil {
-			fmt.Println("BoolSqli true2 request Error:", err)
+			fmt.Printf("[%s] BoolSqli true2 请求失败 %s\n", color.RedString("Error"), err)
 			return false
 		}
 		if CheckBool(True2resp, originResp) {
@@ -312,8 +316,7 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 		// 如果False2和原始页面相同，则表示是漏洞
 		False2resp, err := client.Request(info.URL, info.Method, false2, info.RequestType)
 		if err != nil {
-
-			fmt.Println("BoolSqli false2 request Error:", err)
+			fmt.Printf("[%s] BoolSqli false2 请求失败 %s\n", color.RedString("Error"), err)
 			return false
 		}
 		if CheckBool(False2resp, originResp) {
@@ -321,15 +324,15 @@ func OnceBoolSqli(info Spider.RequestInfo, target string, str bool) bool {
 		}
 		return false
 	}
-	fmt.Println("bool注入其他情况出现")
-	fmt.Println("URL:", info.URL)
-	fmt.Println("Method:", info.Method)
-	fmt.Println("Params:", info.Params)
-	fmt.Println("RequestType:", info.RequestType)
-	fmt.Println("True1AndOrigin:", True1AndOrigin)
-	fmt.Println("False1AndOrigin:", False1AndOrigin)
-	fmt.Println("True1AndFalse1:", True1AndFalse1)
-	fmt.Println("True1resp:", True1resp.String())
+	fmt.Printf("[%s] BoolSqli 未知情况出现 %s\n", color.RedString("Error"), err)
+	fmt.Printf("[%s] URL: %s", color.BlueString("INF"), info.URL)
+	fmt.Printf("[%s] Method: %s", color.BlueString("INF"), info.Method)
+	fmt.Printf("[%s] Params: %s", color.BlueString("INF"), info.Params)
+	fmt.Printf("[%s] RequestType: %s", color.BlueString("INF"), info.RequestType)
+	fmt.Printf("[%s] True1AndOrigin: %s", color.BlueString("INF"), True1AndOrigin)
+	fmt.Printf("[%s] False1AndOrigin: %s", color.BlueString("INF"), False1AndOrigin)
+	fmt.Printf("[%s] True1AndFalse1: %s", color.BlueString("INF"), True1AndFalse1)
+	fmt.Printf("[%s] True1resp: %s", color.BlueString("INF"), True1resp.String())
 	return false
 
 }
@@ -388,7 +391,7 @@ func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool 
 	err1 := copier.Copy(&true2, &params)
 	err2 := copier.Copy(&false1, &params)
 	if err != nil || err1 != nil || err2 != nil {
-		fmt.Println("OnceTimeSqli copy error:", err, err1, err2)
+		fmt.Printf("[%s] TimeSqli 复制字典失败 %s %s %s %s\n", color.RedString("Error"), err, err1, err2)
 		return false
 	}
 	true1[target] = true1[target] + TIMEDIR["true1"]
@@ -397,7 +400,7 @@ func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool 
 	//发送请求
 	true1Resp, err := client.Request(info.URL, info.Method, true1, info.RequestType)
 	if err != nil {
-		fmt.Println("TimeSqli true1 request Error:", err)
+		fmt.Printf("[%s] TimeSqli true1 请求失败 %s\n", color.RedString("Error"), err)
 		return false
 	}
 	// 如果没有发送延时，就不存在sql注入
@@ -406,7 +409,7 @@ func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool 
 	}
 	false1Resp, err := client.Request(info.URL, info.Method, false1, info.RequestType)
 	if err != nil {
-		fmt.Println("TimeSqli false1 request Error:", err)
+		fmt.Printf("[%s] TimeSqli false1 请求失败 %s\n", color.RedString("Error"), err)
 		return false
 	}
 	// 发送延时就说明不存在sql注入
@@ -416,7 +419,7 @@ func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool 
 	// 发送true2请求
 	true2Resp, err := client.Request(info.URL, info.Method, true2, info.RequestType)
 	if err != nil {
-		fmt.Println("TimeSqli true2 request Error:", err)
+		fmt.Printf("[%s] TimeSqli true2 请求失败 %s\n", color.RedString("Error"), err)
 		return false
 	}
 	// 如果没有发送延时，就不存在sql注入
@@ -429,7 +432,7 @@ func (t *TimeSqlInfo) OnceTimeSqli(info Spider.RequestInfo, target string) bool 
 // CalcTime 计算该网站的平均相应时间和标准差
 func (t *TimeSqlInfo) CalcTime(info Spider.RequestInfo) {
 	params := utils.GetParams(&info)
-	data := []float64{}
+	var data []float64
 	resultChan := make(chan float64, TimeRequestTimes+2)
 	// 使用semaphore限制并发数
 	sem := make(chan struct{}, MaxGoroutines)
@@ -445,7 +448,7 @@ func (t *TimeSqlInfo) CalcTime(info Spider.RequestInfo) {
 			// 发送请求
 			resp, err := client.Request(info.URL, info.Method, params, info.RequestType)
 			if err != nil {
-				fmt.Println("TimeSqli request Error:", err)
+				fmt.Printf("[%s] TimeSqli 请求失败 %s\n", color.RedString("Error"), err)
 				return
 			}
 			// 计算响应时间

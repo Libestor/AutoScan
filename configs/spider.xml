@@ -5,4 +5,14 @@
         <item>--disable-dev-shm-usage</item>
         <item>--headless</item>
     </BROWSER_ARGS>
+    <SELECTOR>
+        <item>a</item>
+        <item>button</item>
+        <item>[role='button']</item>
+        <item>[onclick]</item>
+        <item>[data-toggle]</item>
+        <item>.btn</item>
+        <item>[href^='javascript']</item>
+        <item>[data-target]</item>
+    </SELECTOR>
 </spider>

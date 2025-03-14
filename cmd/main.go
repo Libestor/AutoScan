@@ -64,6 +64,7 @@ func main() {
 		output = "spider.json"
 		config = "config.yml"
 	)
+	PrintBanner()
 	userParam := UserParam{}
 	// 目标设置
 	//targetURL := flag.String("u", "", "目标URL")
@@ -268,7 +269,7 @@ func (u *UserParam) SpiderScan(save bool) []Spider.RequestInfo {
 	fmt.Printf("[%s] 正在初始化爬虫引擎\n", color.GreenString("INF"))
 	spider, err := Spider.NewSpider()
 	if err != nil {
-		fmt.Printf("[%s] 爬虫引擎初始化失败\n", color.RedString("Error"))
+		fmt.Printf("[%s] 爬虫引擎初始化失败: %s\n", color.RedString("Error"), err)
 		return nil
 	}
 	fmt.Printf("[%s] 爬虫引擎初始化成功,开始扫描任务\n", color.GreenString("INF"))
@@ -303,9 +304,12 @@ func SaveFile(body interface{}, fileName string) error {
 }
 func (u *UserParam) VulScan(save bool, s []Spider.RequestInfo) {
 	if u.Vuls.Contains("sql") {
-		sqli.InitConfig()
-		fmt.Printf("[%s] 开始进行sql注入扫描\n", color.GreenString("INF"))
-		sqlResults := sqli.RunSqlScan(s)
+		fmt.Printf("[%s] 开始sql注入扫描\n", color.GreenString("INF"))
+		sqlResults, err := sqli.RunSqlScan(s)
+		if err != nil {
+			fmt.Printf("[%s] sql注入引擎启动失败\n", color.RedString("Error"))
+			return
+		}
 		for _, sr := range sqlResults {
 			if sr.IsSqli {
 				u.VulResults = append(u.VulResults, VulResult{
@@ -319,9 +323,12 @@ func (u *UserParam) VulScan(save bool, s []Spider.RequestInfo) {
 		fmt.Printf("[%s] sql注入扫描完成\n", color.GreenString("INF"))
 	}
 	if u.Vuls.Contains("xss") {
-		xss.InitConfig()
 		fmt.Printf("[%s] 开始进行xss扫描\n", color.GreenString("INF"))
-		xssResults := xss.RunXssScan(s)
+		xssResults, err := xss.RunXssScan(s)
+		if err != nil {
+			fmt.Printf("[%s] XSS注入引擎启动失败: %s\n", color.RedString("Error"), err)
+			return
+		}
 		for _, sr := range xssResults {
 			if sr.IsXss {
 				u.VulResults = append(u.VulResults, VulResult{
@@ -333,8 +340,6 @@ func (u *UserParam) VulScan(save bool, s []Spider.RequestInfo) {
 			}
 		}
 		fmt.Printf("[%s] xss扫描完成\n", color.GreenString("INF"))
-	} else {
-		fmt.Printf("[%s] 目前不支持%s这种通用漏洞\n", color.RedString("Error"), u.Vuls.String())
 	}
 	for _, vul := range u.VulResults {
 		if vul.Type == "sql" {
@@ -356,4 +361,20 @@ func (u *UserParam) SaveResult() {
 		return
 	}
 	fmt.Printf("[%s] 扫描结果已保存到%s\n", color.GreenString("INF"), *u.Output)
+}
+func PrintBanner() {
+	// 获取当前工作目录的绝对路径
+	// 构建banner文件的绝对路径（假设可执行文件在项目根目录的bin目录下）
+	bannerPath := "configs/banner.txt"
+	if !utils.CheckFileDirExists(bannerPath) {
+		return
+	}
+	// 读取banner文件内容
+	data, err := os.ReadFile(bannerPath)
+	if err != nil {
+		fmt.Printf("[%s] 加载banner失败: %v\n", color.YellowString("Warning"), err)
+		return
+	}
+	// 打印banner内容并添加一个换行
+	fmt.Printf("\n%s\n", string(data))
 }

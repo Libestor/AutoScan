@@ -29,3 +29,8 @@ pocConfig:
   max_poc_goroutine: 100
 # 参数值默认为1
 default_param_value: 1
+spiderConfig:
+  # 爬虫浏览器参数
+  # 爬虫浏览器配置xml文件
+  spider_config_file: configs/spider.xml
+  spider_fill_string: spider_test_data

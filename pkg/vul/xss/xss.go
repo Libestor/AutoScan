@@ -9,7 +9,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/tebeka/selenium"
 	"github.com/tebeka/selenium/chrome"
-	"log"
 	"net/url"
 	"os"
 	"sync"
@@ -30,62 +29,6 @@ type WebDriverServer struct {
 	Service *selenium.Service
 	caps    selenium.Capabilities
 }
-
-var (
-	chromeDriverPath = ""
-	chromePath       = ""
-	MaxGoroutines    = 10
-	server           WebDriverServer
-	client           utils.Client
-	PAYLOADS         []string
-	BROWSER_ARGS     []string
-)
-
-func InitConfig() {
-	if !configs.CheckChrome() {
-		fmt.Printf("[%s] Chrome 模块初始化失败，XSS模块退出\n", color.RedString("ERROR"))
-		return
-	}
-	var err error
-	// 读取配置文件
-	xmlFile, err := os.ReadFile(configs.GetConfig().VulConfig.XssConfig.PayloadFiles)
-	if err != nil {
-		fmt.Println("Error reading XML file:", err)
-		return
-	}
-
-	// 解析 XML 数据
-	var config Config
-	err = xml.Unmarshal(xmlFile, &config)
-	if err != nil {
-		fmt.Println("Error unmarshalling XML:", err)
-		return
-	}
-	PAYLOADS = config.PAYLOADS.Items
-	BROWSER_ARGS = config.BROWSER_ARGS.Items
-	chromeDriverPath = configs.GetConfig().ChromeDriverPath
-	chromePath = configs.GetConfig().ChromePath
-	MaxGoroutines = configs.GetConfig().VulConfig.XssConfig.MaxGoroutines
-	// 初始化浏览器驱动
-
-	server.Service, err = selenium.NewChromeDriverService(chromeDriverPath, 4444)
-	if err != nil {
-		fmt.Println("Init ChromeDriver server:", err)
-	}
-	server.caps = selenium.Capabilities{
-		"browserName": "chrome",
-		"goog:loggingPrefs": map[string]interface{}{
-			"performance": "ALL",
-		},
-	}
-	chromeCaps := chrome.Capabilities{
-		Path: chromePath,
-		Args: BROWSER_ARGS,
-	}
-	server.caps.AddChrome(chromeCaps)
-	client.InitClient()
-}
-
 type Config struct {
 	XMLName      xml.Name `xml:"xss"`
 	BOOLNUMDIR   MapData  `xml:"BOOLNUMDIR"`
@@ -108,23 +51,80 @@ type Item struct {
 	Value string `xml:",chardata"`
 }
 
-func init() {
+var (
+	chromeDriverPath = ""
+	chromePath       = ""
+	MaxGoroutines    = 10
+	server           WebDriverServer
+	client           utils.Client
+	PAYLOADS         []string
+	BROWSER_ARGS     []string
+)
 
+func InitConfig() error {
+	if !configs.CheckChrome() {
+		return fmt.Errorf("chrome 模块初始化失败")
+	}
+	var err error
+	// 读取配置文件
+	xmlFile, err := os.ReadFile(configs.GetConfig().VulConfig.XssConfig.PayloadFiles)
+	if err != nil {
+		return fmt.Errorf("XSS 配置XSS文件读取失败：%s", err)
+	}
+
+	// 解析 XML 数据
+	var config Config
+	err = xml.Unmarshal(xmlFile, &config)
+	if err != nil {
+		return fmt.Errorf("XSS 配置XSS文件解析失败：%s", err)
+	}
+	PAYLOADS = config.PAYLOADS.Items
+	BROWSER_ARGS = config.BROWSER_ARGS.Items
+	chromeDriverPath = configs.GetConfig().ChromeDriverPath
+	chromePath = configs.GetConfig().ChromePath
+	MaxGoroutines = configs.GetConfig().VulConfig.XssConfig.MaxGoroutines
+	// 初始化浏览器驱动
+
+	server.Service, err = selenium.NewChromeDriverService(chromeDriverPath, 4444)
+	if err != nil {
+		return fmt.Errorf("XSS 配置ChromeDriverPath失败：%s", err)
+	}
+	server.caps = selenium.Capabilities{
+		"browserName": "chrome",
+		"goog:loggingPrefs": map[string]interface{}{
+			"performance": "ALL",
+		},
+	}
+	chromeCaps := chrome.Capabilities{
+		Path: chromePath,
+		Args: BROWSER_ARGS,
+		ExcludeSwitches: []string{
+			"enable-logging",
+		},
+	}
+	server.caps.AddChrome(chromeCaps)
+	client.InitClient()
+	return nil
 }
 
 // GetDriver 获得一个浏览器驱动
-func GetDriver() selenium.WebDriver {
+func GetDriver() (selenium.WebDriver, error) {
 	Driver, err := selenium.NewRemote(server.caps, "")
 	if err != nil {
-		log.Fatal("Error creating web driver:", err)
+		fmt.Printf("[%s] xss 获取浏览器driver失败：%s\n", color.RedString("Error"), err)
+		return nil, fmt.Errorf("xss 获取浏览器driver失败：%s", err)
 	}
-	return Driver
+	return Driver, nil
 }
 
 // RunXssScan 启动XSS扫描
-func RunXssScan(rawData []Spider.RequestInfo) []XssResult {
-	InitConfig()
-	data := []*XssResult{}
+func RunXssScan(rawData []Spider.RequestInfo) ([]XssResult, error) {
+	err := InitConfig()
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("[%s] XSS扫描引擎初始化完成\n", color.GreenString("INF"))
+	var data []*XssResult
 	wg := sync.WaitGroup{}
 	// 用信号量来控制并发数量
 	sem := make(chan struct{}, MaxGoroutines)
@@ -133,8 +133,12 @@ func RunXssScan(rawData []Spider.RequestInfo) []XssResult {
 	for _, info := range rawData {
 		sem <- struct{}{}
 		params := utils.GetParams(&info)
+		driver, err := GetDriver()
+		if err != nil {
+			continue
+		}
 		result := &XssResult{
-			Driver:      GetDriver(),
+			Driver:      driver,
 			URL:         info.URL,
 			Method:      info.Method,
 			Params:      params,
@@ -150,11 +154,11 @@ func RunXssScan(rawData []Spider.RequestInfo) []XssResult {
 	}
 	wg.Wait()
 	fmt.Println("xss注入测试完毕")
-	results := []XssResult{}
+	var results []XssResult
 	for _, i := range data {
 		results = append(results, *i)
 	}
-	return results
+	return results, nil
 }
 
 // TestXSS 单个XSS测试的核心函数
@@ -219,7 +223,7 @@ func (r *XssResult) GetReflectXssPayloads() map[string]string {
 			}
 			u, err := url.ParseRequestURI(r.URL)
 			if err != nil {
-				fmt.Println("GetReflectXssPayloads URL 解析失败")
+				fmt.Printf("[%s] GetReflectXssPayloads URL 解析失败：%s\n", color.RedString("Error"), err)
 				continue
 			}
 			u.RawQuery = value.Encode() // 编码并附加查询参数
@@ -254,7 +258,7 @@ func (r *XssResult) CheckReflectXss(url string, text string) bool {
 
 	err := r.Driver.Get(url)
 	if err != nil {
-		fmt.Println("Get url error:", err)
+		fmt.Printf("[%s] CheckReflectXss 获取url失败: %s\n", color.RedString("Error"), url)
 		return false
 	}
 	// 检查是否存在alert弹窗
@@ -296,7 +300,7 @@ func (r *XssResult) CheckAlert() (bool, []string) {
 func (r *XssResult) CheckStoreXss(url string, AlertText []string) (bool, string) {
 	err := r.Driver.Get(url)
 	if err != nil {
-		fmt.Println("CheckStoreXss Get url error:", err)
+		fmt.Printf("[%s] CheckStoreXss 获取url失败: %s\n", color.RedString("Error"), url)
 		return false, ""
 	}
 	// 检查是否存在alert弹窗

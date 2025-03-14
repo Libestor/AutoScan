@@ -15,10 +15,16 @@ type Config struct {
 	ChromeDriverPath  string `yaml:"chrome_driver_path" `
 	ChromePath        string `yaml:"chrome_path"`
 	DefaultParamValue string `yaml:"default_param_value" default:"1"`
+	SpiderConfig      spiderConfig
+	SpiderConfigFile  string `yaml:"spider_config_file" default:"configs/spider.xml"`
 }
 type vulConfig struct {
 	SqliConfig sqliConfig
 	XssConfig  xssConfig
+}
+type spiderConfig struct {
+	SpiderConfigFile string `yaml:"spider_config_file" default:"configs/spider.xml"`
+	SpiderFillString string `yaml:"spider_fill_string" default:"spider_test_data"`
 }
 type sqliConfig struct {
 	TimeRequestTimes int     `yaml:"time_request_times" default:"30"`
@@ -66,6 +72,7 @@ func init() {
 		DefaultParamValue: "1",
 		ChromeDriverPath:  "",
 		ChromePath:        "",
+		SpiderConfigFile:  "configs/spider.xml",
 	}
 }
 
