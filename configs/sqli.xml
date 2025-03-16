@@ -22,4 +22,8 @@
         <item>\</item>
         <item>%BF</item>
     </ERRORDIR>
+    <ERRORRESP>
+        <item>(?i)(query error: )</item>
+        <item><![CDATA[(?i)([^\n>]{0,100}SQL Syntax[^\n<]+)]]></item>
+    </ERRORRESP>
 </sqli>

@@ -31,16 +31,19 @@ var (
 	BOOLCHAR   map[string]string
 	TIMEDIR    map[string]string
 	ERRORDIR   []string
+	//检测SQL错误的正则表达式
+	regexPatterns []*regexp.Regexp
+	client        = utils.Client{}
 )
 
 // 检测SQL错误的正则表达式
-var regexPatterns = []*regexp.Regexp{
-	// 5. SQL 语法错误
-	regexp.MustCompile(`(?i)([^\n>]{0,100}SQL Syntax[^\n<]+)`),
-	// 11. 查询错误
-	regexp.MustCompile(`(?i)(query error: )`),
-}
-var client = utils.Client{}
+//var regexPatterns = []*regexp.Regexp{
+//	// 5. SQL 语法错误
+//	regexp.MustCompile(`(?i)([^\n>]{0,100}SQL Syntax[^\n<]+)`),
+//	// 11. 查询错误
+//	regexp.MustCompile(`(?i)(query error: )`),
+//}
+//var
 
 type SqlResult struct {
 	URL         string
@@ -65,6 +68,7 @@ type Config struct {
 	BOOLCHAR   MapData  `xml:"BOOLCHAR"`
 	TIMEDIR    MapData  `xml:"TIMEDIR"`
 	ERRORDIR   ListData `xml:"ERRORDIR"`
+	ERRORRESP  ListData `xml:"ERRORRESP"`
 }
 type Item struct {
 	Key   string `xml:"key,attr"`
@@ -113,6 +117,10 @@ func InitConfig() error {
 		TIMEDIR[item.Key] = item.Value
 	}
 	ERRORDIR = config.ERRORDIR.Items
+	regexPatterns = make([]*regexp.Regexp, len(config.ERRORRESP.Items))
+	for i, pattern := range config.ERRORRESP.Items {
+		regexPatterns[i] = regexp.MustCompile(pattern)
+	}
 	return nil
 }
 
