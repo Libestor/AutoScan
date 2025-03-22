@@ -58,7 +58,7 @@ var (
 	server           WebDriverServer
 	client           utils.Client
 	PAYLOADS         []string
-	BROWSER_ARGS     []string
+	BrowserArgs      []string
 )
 
 func InitConfig() error {
@@ -79,7 +79,7 @@ func InitConfig() error {
 		return fmt.Errorf("XSS 配置XSS文件解析失败：%s", err)
 	}
 	PAYLOADS = config.PAYLOADS.Items
-	BROWSER_ARGS = config.BROWSER_ARGS.Items
+	BrowserArgs = config.BROWSER_ARGS.Items
 	chromeDriverPath = configs.GetConfig().ChromeDriverPath
 	chromePath = configs.GetConfig().ChromePath
 	MaxGoroutines = configs.GetConfig().VulConfig.XssConfig.MaxGoroutines
@@ -97,7 +97,7 @@ func InitConfig() error {
 	}
 	chromeCaps := chrome.Capabilities{
 		Path: chromePath,
-		Args: BROWSER_ARGS,
+		Args: BrowserArgs,
 		ExcludeSwitches: []string{
 			"enable-logging",
 		},

@@ -29,7 +29,13 @@ func UseAllPoc(targetUrl string, dirPath string) []*Template {
 			fmt.Println(err)
 		}
 	}
-	fmt.Printf("[%s] 本次共加载Poc %d个\n", color.BlueString("INF"), len(*template))
+	num := 0
+	for _, poc := range *template {
+		if poc.FileVail {
+			num++
+		}
+	}
+	fmt.Printf("[%s] 本次共检测到poc%d个，合法Poc %d个\n", color.BlueString("INF"), len(*template), num)
 	// 解析URL
 	parseUrl, err := ParseURL(targetUrl)
 	if err != nil {
@@ -256,7 +262,6 @@ func Render(template string, placeholders map[string]string) string {
 	for key, value := range placeholders {
 		template = strings.ReplaceAll(template, key, value)
 	}
-
 	return template
 }
 func ParseURL(rawURL string) (*url.URL, error) {

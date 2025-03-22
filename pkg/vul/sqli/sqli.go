@@ -386,7 +386,6 @@ func CheckBool(resp1 *resty.Response, resp2 *resty.Response) bool {
 		return true
 	}
 	return false
-
 }
 
 // OnceTimeSqli 时间盲注的核心函数

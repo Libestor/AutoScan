@@ -366,19 +366,6 @@ func isStaleError(err error) bool {
 	return strings.Contains(err.Error(), "stale element reference")
 }
 
-//// 带超时的元素等待函数
-//func (s *Spider) waitForElements(selector string, timeout time.Duration) ([]selenium.WebElement, error) {
-//	endTime := time.Now().Add(timeout)
-//	for time.Now().Before(endTime) {
-//		els, err := s.driver.FindElements(selenium.ByCSSSelector, selector)
-//		if err == nil && len(els) > 0 {
-//			return els, nil
-//		}
-//		time.Sleep(100 * time.Millisecond)
-//	}
-//	return nil, fmt.Errorf("元素查找超时")
-//}
-
 // 模拟用户点击
 func (s *Spider) handleInteractiveElements() {
 	selectors := SELECTOR
