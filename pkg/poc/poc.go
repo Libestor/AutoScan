@@ -66,15 +66,16 @@ func InitConfig() {
 // LoadAndValidateTemplate 解析单个Poc并验证
 func LoadAndValidateTemplate(path string) (*Template, []error) {
 	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, []error{fmt.Errorf("[%s] 文件读取失败: %w", color.RedString("ERROR"), err)}
-	}
-
 	var tpl Template
-	if err := yaml.Unmarshal(data, &tpl); err != nil {
-		return nil, []error{fmt.Errorf("[%s]  YAML %s 解析失败: %w", color.RedString("ERROR"), path, err)}
+	if err != nil {
+		tpl.FileVail = false
+		return &tpl, []error{fmt.Errorf("[%s] 文件读取失败: %w", color.RedString("ERROR"), err)}
 	}
 
+	if err := yaml.Unmarshal(data, &tpl); err != nil {
+		tpl.FileVail = false
+		return &tpl, []error{fmt.Errorf("[%s]  YAML %s 解析失败: %w", color.RedString("ERROR"), path, err)}
+	}
 	return &tpl, tpl.PocFileValidate()
 }
 
@@ -153,6 +154,12 @@ func (t *Template) PocFileValidate() []error {
 					})
 					t.FileVail = false
 				}
+			case "dsl":
+				errors = append(errors, ValidationError{
+					Field:   matcherPrefix + ".condition",
+					Message: "当前暂不支持dsl类型",
+				})
+				t.FileVail = false
 			default:
 				errors = append(errors, ValidationError{
 					Field:   matcherPrefix + ".type",

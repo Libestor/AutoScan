@@ -24,7 +24,7 @@ func UseAllPoc(targetUrl string, dirPath string) []*Template {
 	// 加载POC
 	template, errors := LoadYamlPoc(dirPath)
 	if len(errors) > 0 {
-		fmt.Printf("[%s] 加载和验证POC文件时存在错误：", color.YellowString("ERROR"))
+		fmt.Printf("[%s] 加载和验证POC文件时存在错误\n", color.YellowString("ERROR"))
 		for _, err := range errors {
 			fmt.Println(err)
 		}
@@ -39,7 +39,7 @@ func UseAllPoc(targetUrl string, dirPath string) []*Template {
 	// 解析URL
 	parseUrl, err := ParseURL(targetUrl)
 	if err != nil {
-		fmt.Printf("[%s] URL: %s 解析失败: %s，请重新输入", color.RedString("ERROR"), targetUrl, err)
+		fmt.Printf("[%s] URL: %s 解析失败: %s，请重新输入\n", color.RedString("ERROR"), targetUrl, err)
 		return nil
 	}
 	placeholders := BuildPlaceHolders(parseUrl)
@@ -57,7 +57,7 @@ func UseAllPoc(targetUrl string, dirPath string) []*Template {
 			var ph map[string]string
 			err2 := copier.Copy(&ph, placeholders)
 			if err2 != nil {
-				fmt.Printf("[%s] 复制占位符失败: %s", color.RedString("ERROR"), err2)
+				fmt.Printf("[%s] 复制占位符失败: %s\n", color.RedString("ERROR"), err2)
 				return
 			}
 			poc.PocValidate(ph)
@@ -71,7 +71,7 @@ func UseAllPoc(targetUrl string, dirPath string) []*Template {
 			result = append(result, poc)
 		}
 	}
-	fmt.Printf("[%s] 所有POC验证完成", color.BlueString("INF"))
+	fmt.Printf("[%s] 所有POC验证完成\n", color.BlueString("INF"))
 	return result
 }
 func UseOnePoc(targetUrl string, pocPath string) []*Template {
@@ -79,7 +79,7 @@ func UseOnePoc(targetUrl string, pocPath string) []*Template {
 	// 加载POC
 	template, errors := LoadAndValidateTemplate(pocPath)
 	if len(errors) > 0 {
-		fmt.Printf("[%s] 加载和验证POC文件时存在错误：", color.YellowString("ERROR"))
+		fmt.Printf("[%s] 加载和验证POC文件时存在错误\n", color.YellowString("ERROR"))
 		for _, err := range errors {
 			fmt.Println(err)
 		}
@@ -87,7 +87,7 @@ func UseOnePoc(targetUrl string, pocPath string) []*Template {
 	// 解析URL
 	parseUrl, err := ParseURL(targetUrl)
 	if err != nil {
-		fmt.Printf("[%s] URL:%s 解析失败: %s，请重新输入", color.RedString("ERROR"), targetUrl, err)
+		fmt.Printf("[%s] URL:%s 解析失败: %s，请重新输入\n", color.RedString("ERROR"), targetUrl, err)
 		return nil
 	}
 	placeholders := BuildPlaceHolders(parseUrl)
@@ -124,7 +124,7 @@ func (t *Template) PocValidate(ph map[string]string) {
 			for _, path := range request.Path {
 				post, err := req.Post(Render(path, ph))
 				if err != nil {
-					fmt.Printf("[%s] 请求 %s 出现错误: %s", color.RedString("ERROR"), Render(path, ph), err)
+					fmt.Printf("[%s] 请求 %s 出现错误: %s\n", color.RedString("ERROR"), Render(path, ph), err)
 					continue
 				}
 				resqs = append(resqs, post)
@@ -144,7 +144,7 @@ func (t *Template) PocValidate(ph map[string]string) {
 					oneReps, err = req.Put(RendPath)
 				}
 				if err != nil {
-					fmt.Printf("[%s] 请求 %s 出现错误: %s", color.RedString("ERROR"), Render(path, ph), err)
+					fmt.Printf("[%s] 请求 %s 出现错误: %s\n", color.RedString("ERROR"), Render(path, ph), err)
 					continue
 				}
 				resqs = append(resqs, oneReps)
@@ -191,6 +191,9 @@ func (t *Template) PocValidate(ph map[string]string) {
 
 // CalcAndOr 交并运算
 func CalcAndOr(matchResult []bool, t string) bool {
+	if matchResult == nil {
+		return false
+	}
 	if t == "and" {
 		for _, result := range matchResult {
 			if !result {
@@ -224,8 +227,14 @@ func (t *Template) Print(ph map[string]string) {
 		severity = color.RedString("%s", t.Info.Severity)
 	}
 	Name := color.BlueString("%s", t.Info.Name)
-	fmt.Printf("[%s] [%s] [%s] [%s]\n", id, severity, Name, Render(t.Requests[0].Path[0], ph))
-	t.VulUrl = Render(t.Requests[0].Path[0], ph)
+	if len(t.Requests[0].Path) <= 0 || t.Requests[0].Path[0] == "" {
+		fmt.Printf("[%s] [%s] [%s] [%s]\n", id, severity, Name, "")
+		t.VulUrl = id
+	} else {
+		fmt.Printf("[%s] [%s] [%s] [%s]\n", id, severity, Name, Render(t.Requests[0].Path[0], ph))
+		t.VulUrl = Render(t.Requests[0].Path[0], ph)
+	}
+
 }
 
 func BuildPlaceHolders(u *url.URL) map[string]string {
